@@ -1,0 +1,41 @@
+[package]
+name = "elid-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "elid_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "elid"
+path = "src/main.rs"
+
+[dependencies]
+elid-core = { path = "../elid-core" }
+clap = { workspace = true }
+anyhow = { workspace = true }
+csv = "1.3"
+parquet = "53"
+arrow = "53"
+arrow-array = "53"
+serde_json = "1.0"
+indicatif = "0.17"
+
+# Optional: for string similarity examples
+fastembed = { version = "4", optional = true }
+
+[features]
+default = []
+fastembed = ["dep:fastembed"]
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.0"
+tempfile = "3.8"
+
+[lints]
+workspace = true
