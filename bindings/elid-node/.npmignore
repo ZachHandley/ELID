@@ -1,0 +1,25 @@
+# Source files
+src/
+__tests__/
+examples/
+target/
+Cargo.toml
+Cargo.lock
+build.rs
+rustfmt.toml
+
+# Build configuration
+tsconfig.json
+vitest.config.ts
+
+# Documentation
+*.md
+!README.md
+
+# CI/CD
+.github/
+
+# Development
+node_modules/
+.vscode/
+.idea/

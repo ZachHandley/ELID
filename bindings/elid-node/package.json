@@ -1,0 +1,72 @@
+{
+  "name": "elid",
+  "version": "0.1.0",
+  "description": "Embedding Locality-preserving Identifiers - Convert high-dimensional embeddings to sortable string IDs",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "wasm",
+    "*.node"
+  ],
+  "scripts": {
+    "artifacts": "napi artifacts",
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "build:wasm": "npm run build:wasm:web && npm run build:wasm:node",
+    "build:wasm:web": "wasm-pack build --target web --out-dir wasm/web --out-name index",
+    "build:wasm:node": "wasm-pack build --target nodejs --out-dir wasm/node --out-name index",
+    "prepublishOnly": "napi prepublish -t npm",
+    "test": "vitest run",
+    "test:wasm": "vitest run __tests__/wasm.test.ts",
+    "version": "napi version",
+    "typecheck": "tsc --noEmit"
+  },
+  "napi": {
+    "binaryName": "elid",
+    "targets": [
+      "x86_64-unknown-linux-gnu",
+      "aarch64-unknown-linux-gnu",
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-pc-windows-msvc"
+    ],
+    "packageName": "elid"
+  },
+  "keywords": [
+    "embedding",
+    "elid",
+    "vector",
+    "similarity",
+    "simhash",
+    "hilbert",
+    "morton",
+    "locality-sensitive-hashing",
+    "napi-rs",
+    "rust"
+  ],
+  "author": "Zach Handley <zachhandley@gmail.com>",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zachhandley/ELID.git",
+    "directory": "bindings/elid-node"
+  },
+  "bugs": {
+    "url": "https://github.com/zachhandley/ELID/issues"
+  },
+  "homepage": "https://github.com/zachhandley/ELID#readme",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.4",
+    "@types/node": "^20.10.0",
+    "@vitest/ui": "^1.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "dependencies": {},
+  "packageManager": "npm@10.2.0"
+}

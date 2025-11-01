@@ -1,6 +1,13 @@
 [workspace]
 resolver = "2"
-members = ["elid-core", "elid-cli"]
+members = [
+    "elid-core",
+    "elid-cli",
+    "bindings/elid-ffi",
+    "bindings/test-vector-gen",
+    "bindings/elid-node",
+    "bindings/elid-flutter/rust",
+]
 
 [workspace.package]
 version = "0.1.0"

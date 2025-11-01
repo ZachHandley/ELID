@@ -1,0 +1,251 @@
+name: Flutter Bindings CI
+
+on:
+  push:
+    branches: [ main, '002-language-bindings' ]
+    paths:
+      - 'bindings/elid-flutter/**'
+      - 'elid-core/**'
+      - '.github/workflows/bindings-flutter.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'bindings/elid-flutter/**'
+      - 'elid-core/**'
+
+env:
+  FLUTTER_VERSION: '3.24.0'
+  RUST_VERSION: '1.70'
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Install flutter_rust_bridge_codegen
+        run: cargo install flutter_rust_bridge_codegen --version 2.3.0
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev llvm-dev libclang-dev clang
+
+      - name: Get Flutter dependencies
+        working-directory: bindings/elid-flutter
+        run: flutter pub get
+
+      - name: Generate bridge code
+        working-directory: bindings/elid-flutter
+        run: flutter_rust_bridge_codegen generate
+
+      - name: Check Rust formatting
+        working-directory: bindings/elid-flutter/rust
+        run: cargo fmt --check
+
+      - name: Rust clippy
+        working-directory: bindings/elid-flutter/rust
+        run: cargo clippy -- -D warnings
+
+      - name: Run Rust tests
+        working-directory: bindings/elid-flutter/rust
+        run: cargo test
+
+      - name: Analyze Flutter code
+        working-directory: bindings/elid-flutter
+        run: flutter analyze
+
+      - name: Run Flutter tests
+        working-directory: bindings/elid-flutter
+        run: flutter test
+
+  build-android:
+    name: Build Android (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target: [arm64-v8a, armeabi-v7a, x86_64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Install Android NDK
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r25c
+
+      - name: Add Rust target
+        run: |
+          case "${{ matrix.target }}" in
+            arm64-v8a) rustup target add aarch64-linux-android ;;
+            armeabi-v7a) rustup target add armv7-linux-androideabi ;;
+            x86_64) rustup target add x86_64-linux-android ;;
+          esac
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Install flutter_rust_bridge_codegen
+        run: cargo install flutter_rust_bridge_codegen --version 2.3.0
+
+      - name: Get dependencies
+        working-directory: bindings/elid-flutter
+        run: flutter pub get
+
+      - name: Generate bridge code
+        working-directory: bindings/elid-flutter
+        run: flutter_rust_bridge_codegen generate
+
+      - name: Build Rust library
+        working-directory: bindings/elid-flutter/rust
+        env:
+          CARGO_TARGET_DIR: target/android
+        run: |
+          case "${{ matrix.target }}" in
+            arm64-v8a)
+              cargo build --release --target aarch64-linux-android
+              ;;
+            armeabi-v7a)
+              cargo build --release --target armv7-linux-androideabi
+              ;;
+            x86_64)
+              cargo build --release --target x86_64-linux-android
+              ;;
+          esac
+
+  build-ios:
+    name: Build iOS
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Add iOS targets
+        run: |
+          rustup target add aarch64-apple-ios
+          rustup target add x86_64-apple-ios
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Install flutter_rust_bridge_codegen
+        run: cargo install flutter_rust_bridge_codegen --version 2.3.0
+
+      - name: Get dependencies
+        working-directory: bindings/elid-flutter
+        run: flutter pub get
+
+      - name: Generate bridge code
+        working-directory: bindings/elid-flutter
+        run: flutter_rust_bridge_codegen generate
+
+      - name: Build for iOS device
+        working-directory: bindings/elid-flutter/rust
+        run: cargo build --release --target aarch64-apple-ios
+
+      - name: Build for iOS simulator
+        working-directory: bindings/elid-flutter/rust
+        run: cargo build --release --target x86_64-apple-ios
+
+  build-desktop:
+    name: Build Desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos
+          - os: ubuntu-latest
+            platform: linux
+          - os: windows-latest
+            platform: windows
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Install flutter_rust_bridge_codegen
+        run: cargo install flutter_rust_bridge_codegen --version 2.3.0
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev llvm-dev libclang-dev clang
+
+      - name: Get dependencies
+        working-directory: bindings/elid-flutter
+        run: flutter pub get
+
+      - name: Generate bridge code
+        working-directory: bindings/elid-flutter
+        run: flutter_rust_bridge_codegen generate
+
+      - name: Build ${{ matrix.platform }}
+        working-directory: bindings/elid-flutter
+        run: flutter build ${{ matrix.platform }}
+
+  publish-check:
+    name: Publish dry-run
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: 'stable'
+
+      - name: Get dependencies
+        working-directory: bindings/elid-flutter
+        run: flutter pub get
+
+      - name: Check publish
+        working-directory: bindings/elid-flutter
+        run: flutter pub publish --dry-run

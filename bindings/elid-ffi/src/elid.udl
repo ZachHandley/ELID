@@ -1,0 +1,38 @@
+// UniFFI interface definition for ELID
+// Generates Swift, Kotlin, and Ruby bindings
+
+namespace elid_ffi {
+  // Encode a single embedding into an ELID string
+  [Throws=UniElidError]
+  string uni_encode(sequence<f32> embedding, UniProfile profile);
+
+  // Decode an ELID string back to raw bytes
+  [Throws=UniElidError]
+  sequence<u8> uni_decode(string elid);
+
+  // Compute Hamming distance between two Mini128 ELIDs (0-128)
+  [Throws=UniElidError]
+  u32 uni_hamming_distance(string elid1, string elid2);
+
+  // Encode a batch of embeddings in parallel
+  [Throws=UniElidError]
+  sequence<string> uni_encode_batch(sequence<sequence<f32>> embeddings, UniProfile profile);
+};
+
+// ELID encoding profile
+enum UniProfile {
+  "Mini128",
+  "Morton10x10",
+  "Hilbert10x10"
+};
+
+// Error types that can occur during ELID operations
+[Error]
+enum UniElidError {
+  "InvalidDimension",
+  "InvalidValue",
+  "InvalidEncoding",
+  "InvalidHeader",
+  "ProfileMismatch",
+  "TransformNotFound",
+};

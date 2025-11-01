@@ -1,0 +1,50 @@
+{
+  "name": "elid/elid",
+  "description": "PHP bindings for ELID (Embedding Locality-preserving Identifiers)",
+  "type": "library",
+  "license": "MIT OR Apache-2.0",
+  "keywords": [
+    "embeddings",
+    "vector",
+    "simhash",
+    "hilbert",
+    "morton",
+    "ffi"
+  ],
+  "authors": [
+    {
+      "name": "Zach Handley",
+      "email": "zachhandley@gmail.com"
+    }
+  ],
+  "require": {
+    "php": ">=7.4",
+    "ext-ffi": "*"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^9.5|^10.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Elid\\": "src/"
+    }
+  },
+  "autoload-dev": {
+    "psr-4": {
+      "Elid\\Tests\\": "tests/"
+    }
+  },
+  "extra": {
+    "ffi-libraries": {
+      "linux": "libelid_ffi.so",
+      "darwin": "libelid_ffi.dylib",
+      "windows": "elid_ffi.dll"
+    }
+  },
+  "suggest": {
+    "elid-ffi": "Native ELID library must be built and available at runtime (see README)"
+  },
+  "scripts": {
+    "test": "phpunit --colors=always"
+  }
+}

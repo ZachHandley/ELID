@@ -1,0 +1,13 @@
+# UniFFI configuration for ELID bindings
+
+[bindings.swift]
+cdylib_name = "elid_ffi"
+module_name = "Elid"
+
+[bindings.kotlin]
+cdylib_name = "elid_ffi"
+package_name = "com.elid"
+
+[bindings.ruby]
+cdylib_name = "elid_ffi"
+module_name = "Elid"

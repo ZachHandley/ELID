@@ -1,0 +1,33 @@
+[package]
+name = "elid-python"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+description = "Python bindings for ELID (Embedding Locality IDentifier)"
+readme = "README.md"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/zachhandley/ELID"
+homepage = "https://github.com/zachhandley/ELID"
+keywords = ["embeddings", "locality", "vector", "database", "simhash"]
+categories = ["api-bindings", "encoding", "database"]
+authors = ["Zach Handley <zachhandley@gmail.com>"]
+
+[workspace]
+# Empty workspace to prevent inheriting from parent workspace
+
+[lib]
+name = "elid"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.21", features = ["extension-module"] }
+numpy = "0.21"
+elid-core = { path = "../../elid-core" }
+rayon = "1.8"
+
+[profile.release]
+strip = true        # Strip symbols for smaller wheel
+lto = true          # Link-time optimization
+codegen-units = 1   # Better optimization
+opt-level = 3       # Maximum optimization
+overflow-checks = true

@@ -1,0 +1,8 @@
+rust_input: crate::api
+rust_root: rust/
+dart_output: lib/src/bridge_generated.dart
+c_output: ios/Classes/bridge_generated.h
+llvm_path:
+  - /usr/lib/llvm-14
+  - /opt/homebrew/opt/llvm
+full_dep: true

@@ -1,0 +1,24 @@
+[package]
+name = "elid-ffi"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "FFI layer for ELID language bindings"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+elid-core = { path = "../../elid-core" }
+uniffi = "0.25"
+thiserror = "1.0"
+
+[build-dependencies]
+uniffi = { version = "0.25", features = ["build"] }
+
+[lints.rust]
+# FFI requires unsafe code for C interop
+unsafe_code = "allow"
+missing_docs = "warn"

@@ -1,0 +1,21 @@
+[package]
+name = "elid-flutter"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.70"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+elid-core = { path = "../../../elid-core" }
+flutter_rust_bridge = "=2.11.1"
+anyhow = "1.0"
+tokio = { version = "1.35", features = ["rt", "macros"] }
+futures = "0.3"
+
+[profile.release]
+lto = true
+opt-level = 3
+strip = true
+codegen-units = 1
