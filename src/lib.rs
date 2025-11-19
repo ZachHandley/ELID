@@ -145,9 +145,7 @@ pub fn find_matches_above_threshold(query: &str, candidates: &[&str], threshold:
         .collect()
 }
 
-// Re-export Python module when python feature is enabled
-#[cfg(feature = "python")]
-pub use python::elid as python_module;
+// Python module is defined in python.rs and exported via #[pymodule]
 
 #[cfg(test)]
 mod tests {

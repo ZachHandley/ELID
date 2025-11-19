@@ -34,5 +34,4 @@ Issues = "https://github.com/ZachHandley/ELID/issues"
 
 [tool.maturin]
 features = ["python"]
-python-source = "python"
 module-name = "elid"

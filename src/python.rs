@@ -165,14 +165,15 @@ fn best_match(a: &str, b: &str) -> f64 {
 ///     >>> result
 ///     {'index': 0, 'score': 0.907}
 #[pyfunction]
-fn find_best_match(query: &str, candidates: Vec<&str>) -> PyResult<PyObject> {
-    let (idx, score) = crate::find_best_match(query, &candidates);
+fn find_best_match(query: &str, candidates: Vec<String>) -> PyResult<PyObject> {
+    let candidate_refs: Vec<&str> = candidates.iter().map(|s| s.as_str()).collect();
+    let (idx, score) = crate::find_best_match(query, &candidate_refs);
 
     Python::with_gil(|py| {
-        let dict = pyo3::types::PyDict::new(py);
+        let dict = pyo3::types::PyDict::new_bound(py);
         dict.set_item("index", idx)?;
         dict.set_item("score", score)?;
-        Ok(dict.into())
+        Ok(dict.into_py(py))
     })
 }
 
@@ -195,20 +196,21 @@ fn find_best_match(query: &str, candidates: Vec<&str>) -> PyResult<PyObject> {
 #[pyfunction]
 fn find_matches_above_threshold(
     query: &str,
-    candidates: Vec<&str>,
+    candidates: Vec<String>,
     threshold: f64,
 ) -> PyResult<PyObject> {
-    let matches = crate::find_matches_above_threshold(query, &candidates, threshold);
+    let candidate_refs: Vec<&str> = candidates.iter().map(|s| s.as_str()).collect();
+    let matches = crate::find_matches_above_threshold(query, &candidate_refs, threshold);
 
     Python::with_gil(|py| {
-        let list = pyo3::types::PyList::empty(py);
+        let list = pyo3::types::PyList::empty_bound(py);
         for (idx, score) in matches {
-            let dict = pyo3::types::PyDict::new(py);
+            let dict = pyo3::types::PyDict::new_bound(py);
             dict.set_item("index", idx)?;
             dict.set_item("score", score)?;
             list.append(dict)?;
         }
-        Ok(list.into())
+        Ok(list.into_py(py))
     })
 }
 
@@ -378,7 +380,7 @@ fn find_similar_hashes(query_hash: u64, candidate_hashes: Vec<u64>, max_distance
 ///
 /// A fast library for computing various string similarity metrics.
 #[pymodule]
-fn elid(_py: Python, m: &PyModule) -> PyResult<()> {
+fn elid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(levenshtein, m)?)?;
     m.add_function(wrap_pyfunction!(normalized_levenshtein, m)?)?;
     m.add_function(wrap_pyfunction!(jaro, m)?)?;
