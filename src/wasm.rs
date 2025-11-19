@@ -4,6 +4,7 @@
 //! These bindings work in browsers, Node.js, Deno, and Bun.
 
 use wasm_bindgen::prelude::*;
+use js_sys::{Object, Reflect};
 
 /// Compute the Levenshtein distance between two strings.
 ///
@@ -144,14 +145,14 @@ pub fn best_match(a: &str, b: &str) -> f64 {
 /// console.log(result); // { index: 0, score: 0.907 }
 /// ```
 #[wasm_bindgen(js_name = findBestMatch)]
-pub fn find_best_match(query: &str, candidates: Vec<String>) -> JsValue {
+pub fn find_best_match(query: &str, candidates: Vec<String>) -> Object {
     let candidate_refs: Vec<&str> = candidates.iter().map(|s| s.as_str()).collect();
     let (idx, score) = crate::find_best_match(query, &candidate_refs);
 
-    serde_wasm_bindgen::to_value(&serde_json::json!({
-        "index": idx,
-        "score": score
-    })).unwrap()
+    let result = Object::new();
+    Reflect::set(&result, &"index".into(), &JsValue::from(idx)).unwrap();
+    Reflect::set(&result, &"score".into(), &JsValue::from(score)).unwrap();
+    result
 }
 
 /// Find all matches above a threshold score.

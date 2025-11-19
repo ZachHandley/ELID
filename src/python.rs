@@ -3,7 +3,6 @@
 //! This module provides Python bindings for all ELID functions.
 
 use pyo3::prelude::*;
-use pyo3::exceptions::PyValueError;
 
 /// Compute the Levenshtein distance between two strings.
 ///

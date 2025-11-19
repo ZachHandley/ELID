@@ -2,9 +2,8 @@
 //!
 //! SimHash creates a numeric fingerprint where similar strings produce similar hashes.
 //! This allows for efficient similarity queries using numeric comparisons.
-
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
+//!
+//! Uses FNV-1a hash for stability across Rust versions.
 
 /// Compute the SimHash fingerprint of a string.
 ///
@@ -179,11 +178,21 @@ fn extract_features(text: &str) -> Vec<String> {
     features
 }
 
-/// Hash a string to u64 using DefaultHasher
+/// Hash a string to u64 using FNV-1a hash (stable across Rust versions)
+///
+/// FNV-1a is a simple, fast, non-cryptographic hash that produces consistent
+/// results across different Rust compiler versions, making it perfect for
+/// database storage where hash values must remain stable.
 fn hash_string(s: &str) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    s.hash(&mut hasher);
-    hasher.finish()
+    const FNV_OFFSET_BASIS: u64 = 14695981039346656037;
+    const FNV_PRIME: u64 = 1099511628211;
+
+    let mut hash = FNV_OFFSET_BASIS;
+    for byte in s.as_bytes() {
+        hash ^= *byte as u64;
+        hash = hash.wrapping_mul(FNV_PRIME);
+    }
+    hash
 }
 
 #[cfg(test)]
