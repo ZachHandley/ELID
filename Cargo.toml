@@ -18,6 +18,7 @@ crate-type = ["cdylib", "rlib"]
 default = []
 wasm = ["wasm-bindgen", "js-sys", "serde", "serde-wasm-bindgen", "serde_json"]
 python = ["pyo3"]
+ffi = []
 
 [dependencies]
 # No external dependencies for core algorithms - pure Rust implementation
@@ -35,6 +36,9 @@ optional = true
 [dev-dependencies]
 criterion = "0.5"
 wasm-bindgen-test = "0.3"
+
+[build-dependencies]
+cbindgen = "0.26"
 
 [[bench]]
 name = "similarity_bench"

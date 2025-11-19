@@ -33,7 +33,7 @@
 //! ```
 
 #![deny(missing_docs)]
-#![deny(unsafe_code)]
+#![cfg_attr(not(feature = "ffi"), deny(unsafe_code))]
 
 mod levenshtein;
 mod jaro_winkler;
@@ -47,6 +47,9 @@ pub mod wasm;
 
 #[cfg(feature = "python")]
 pub mod python;
+
+#[cfg(feature = "ffi")]
+pub mod ffi;
 
 pub use levenshtein::{levenshtein, normalized_levenshtein, levenshtein_with_opts};
 pub use jaro_winkler::{jaro, jaro_winkler, jaro_winkler_with_prefix};
