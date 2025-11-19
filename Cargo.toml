@@ -1,0 +1,30 @@
+[package]
+name = "elid"
+version = "0.1.0"
+edition = "2021"
+authors = ["ELID Contributors"]
+description = "A fast and efficient string similarity library"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/ZachHandley/ELID"
+keywords = ["string", "similarity", "levenshtein", "fuzzy", "distance"]
+categories = ["algorithms", "text-processing"]
+
+[lib]
+name = "elid"
+path = "src/lib.rs"
+crate-type = ["lib", "cdylib"]
+
+[dependencies]
+# No external dependencies for core algorithms - pure Rust implementation
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "similarity_bench"
+harness = false
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
