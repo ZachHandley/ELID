@@ -12,13 +12,28 @@ categories = ["algorithms", "text-processing"]
 [lib]
 name = "elid"
 path = "src/lib.rs"
-crate-type = ["lib", "cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = []
+wasm = ["wasm-bindgen", "serde", "serde-wasm-bindgen", "serde_json"]
+python = ["pyo3"]
 
 [dependencies]
 # No external dependencies for core algorithms - pure Rust implementation
+wasm-bindgen = { version = "0.2", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+serde_json = { version = "1.0", optional = true }
+
+[dependencies.pyo3]
+version = "0.22"
+features = ["extension-module"]
+optional = true
 
 [dev-dependencies]
 criterion = "0.5"
+wasm-bindgen-test = "0.3"
 
 [[bench]]
 name = "similarity_bench"
@@ -28,3 +43,6 @@ harness = false
 opt-level = 3
 lto = true
 codegen-units = 1
+
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = false

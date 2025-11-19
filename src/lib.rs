@@ -34,6 +34,12 @@ mod hamming;
 mod osa;
 mod common;
 
+#[cfg(feature = "wasm")]
+pub mod wasm;
+
+#[cfg(feature = "python")]
+pub mod python;
+
 pub use levenshtein::{levenshtein, normalized_levenshtein, levenshtein_with_opts};
 pub use jaro_winkler::{jaro, jaro_winkler, jaro_winkler_with_prefix};
 pub use hamming::{hamming, normalized_hamming};
@@ -129,6 +135,10 @@ pub fn find_matches_above_threshold(query: &str, candidates: &[&str], threshold:
         })
         .collect()
 }
+
+// Re-export Python module when python feature is enabled
+#[cfg(feature = "python")]
+pub use python::elid as python_module;
 
 #[cfg(test)]
 mod tests {

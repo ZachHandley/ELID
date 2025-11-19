@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ELID WASM Browser Example</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        .example {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f9f9f9;
+            border-left: 4px solid #4CAF50;
+        }
+        .search-box {
+            margin: 20px 0;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+        .results {
+            margin-top: 15px;
+        }
+        .result-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: white;
+            border-radius: 4px;
+            border: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .score {
+            background: #4CAF50;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-weight: bold;
+        }
+        code {
+            background: #e8e8e8;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 ELID WASM - String Similarity Search</h1>
+
+        <div class="example">
+            <h3>Live Product Search</h3>
+            <p>Try searching for: <code>iphone</code>, <code>galaxy</code>, <code>pixel</code></p>
+            <div class="search-box">
+                <input type="text" id="searchInput" placeholder="Start typing to search products...">
+            </div>
+            <div class="results" id="results"></div>
+        </div>
+
+        <div class="example">
+            <h3>Algorithm Comparison</h3>
+            <p>Compare different algorithms on the same input:</p>
+            <div id="comparison"></div>
+        </div>
+
+        <div class="example">
+            <h3>Name Matching</h3>
+            <p>Try fuzzy matching on names (great for deduplication):</p>
+            <div id="nameMatching"></div>
+        </div>
+    </div>
+
+    <script type="module">
+        import init, * as elid from '../../pkg-web/elid.js';
+
+        // Sample product data
+        const products = [
+            "iPhone 14 Pro Max",
+            "iPhone 14 Pro",
+            "iPhone 14",
+            "iPhone 13 Pro",
+            "Samsung Galaxy S23 Ultra",
+            "Samsung Galaxy S23",
+            "Google Pixel 7 Pro",
+            "Google Pixel 7",
+            "OnePlus 11",
+            "Xiaomi 13 Pro"
+        ];
+
+        async function run() {
+            // Initialize WASM
+            await init();
+            console.log('ELID WASM loaded successfully!');
+
+            // Setup search functionality
+            const searchInput = document.getElementById('searchInput');
+            const resultsDiv = document.getElementById('results');
+
+            searchInput.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase().trim();
+
+                if (query.length === 0) {
+                    resultsDiv.innerHTML = '';
+                    return;
+                }
+
+                // Score all products
+                const scored = products.map((product, i) => ({
+                    product,
+                    score: elid.bestMatch(query, product.toLowerCase())
+                }));
+
+                // Sort by score descending
+                scored.sort((a, b) => b.score - a.score);
+
+                // Display top results
+                const threshold = 0.3;
+                const matches = scored.filter(item => item.score >= threshold).slice(0, 5);
+
+                if (matches.length === 0) {
+                    resultsDiv.innerHTML = '<p style="color: #999;">No matches found</p>';
+                    return;
+                }
+
+                resultsDiv.innerHTML = matches.map(item => `
+                    <div class="result-item">
+                        <span>${item.product}</span>
+                        <span class="score">${(item.score * 100).toFixed(0)}%</span>
+                    </div>
+                `).join('');
+            });
+
+            // Algorithm comparison example
+            const comparisonDiv = document.getElementById('comparison');
+            const str1 = "kitten";
+            const str2 = "sitting";
+
+            comparisonDiv.innerHTML = `
+                <p>Comparing: <code>${str1}</code> vs <code>${str2}</code></p>
+                <ul>
+                    <li><b>Levenshtein Distance:</b> ${elid.levenshtein(str1, str2)}</li>
+                    <li><b>Normalized Levenshtein:</b> ${elid.normalizedLevenshtein(str1, str2).toFixed(3)}</li>
+                    <li><b>Jaro Similarity:</b> ${elid.jaro(str1, str2).toFixed(3)}</li>
+                    <li><b>Jaro-Winkler:</b> ${elid.jaroWinkler(str1, str2).toFixed(3)}</li>
+                    <li><b>OSA Distance:</b> ${elid.osaDistance(str1, str2)}</li>
+                </ul>
+            `;
+
+            // Name matching example
+            const nameMatchingDiv = document.getElementById('nameMatching');
+            const names = [
+                ["John Smith", "Jon Smith"],
+                ["Martha Stewart", "Marhta Stewart"],
+                ["Robert Johnson", "Bob Johnson"]
+            ];
+
+            nameMatchingDiv.innerHTML = names.map(([name1, name2]) => {
+                const score = elid.jaroWinkler(name1, name2);
+                const isDuplicate = score > 0.85;
+                return `
+                    <div class="result-item">
+                        <span><code>${name1}</code> vs <code>${name2}</code></span>
+                        <span class="score" style="background: ${isDuplicate ? '#4CAF50' : '#ff9800'}">
+                            ${(score * 100).toFixed(0)}% ${isDuplicate ? '✓' : '?'}
+                        </span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Run when page loads
+        run().catch(console.error);
+    </script>
+</body>
+</html>
