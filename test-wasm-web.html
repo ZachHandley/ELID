@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ELID WASM Web Target Test</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1e1e1e;
+            color: #d4d4d4;
+        }
+        h1 { color: #4ec9b0; }
+        .test {
+            margin: 20px 0;
+            padding: 15px;
+            background: #252526;
+            border-left: 3px solid #007acc;
+        }
+        .pass { border-left-color: #4ec9b0; }
+        .fail { border-left-color: #f48771; }
+        .test-name {
+            font-weight: bold;
+            color: #4fc1ff;
+            margin-bottom: 10px;
+        }
+        .output {
+            color: #ce9178;
+            margin: 5px 0;
+        }
+        .status {
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .pass .status { color: #4ec9b0; }
+        .fail .status { color: #f48771; }
+        #summary {
+            margin-top: 30px;
+            padding: 20px;
+            background: #252526;
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .all-pass { color: #4ec9b0; }
+        .some-fail { color: #f48771; }
+    </style>
+</head>
+<body>
+    <h1>ELID WASM Web Target Test</h1>
+    <div id="tests"></div>
+    <div id="summary"></div>
+
+    <script type="module">
+        import init, * as elid from './pkg-web/elid.js';
+
+        let passed = 0;
+        let failed = 0;
+
+        function addTest(name, fn) {
+            const testDiv = document.createElement('div');
+            testDiv.className = 'test';
+
+            const nameDiv = document.createElement('div');
+            nameDiv.className = 'test-name';
+            nameDiv.textContent = name;
+            testDiv.appendChild(nameDiv);
+
+            try {
+                const output = fn();
+
+                if (output.lines) {
+                    output.lines.forEach(line => {
+                        const lineDiv = document.createElement('div');
+                        lineDiv.className = 'output';
+                        lineDiv.textContent = line;
+                        testDiv.appendChild(lineDiv);
+                    });
+                }
+
+                if (output.pass) {
+                    testDiv.classList.add('pass');
+                    const statusDiv = document.createElement('div');
+                    statusDiv.className = 'status';
+                    statusDiv.textContent = '✓ PASS';
+                    testDiv.appendChild(statusDiv);
+                    passed++;
+                } else {
+                    testDiv.classList.add('fail');
+                    const statusDiv = document.createElement('div');
+                    statusDiv.className = 'status';
+                    statusDiv.textContent = '✗ FAIL: ' + (output.reason || 'Unknown reason');
+                    testDiv.appendChild(statusDiv);
+                    failed++;
+                }
+            } catch (err) {
+                testDiv.classList.add('fail');
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'output';
+                errorDiv.textContent = 'Error: ' + err.message;
+                testDiv.appendChild(errorDiv);
+                const statusDiv = document.createElement('div');
+                statusDiv.className = 'status';
+                statusDiv.textContent = '✗ FAIL (Exception)';
+                testDiv.appendChild(statusDiv);
+                failed++;
+            }
+
+            document.getElementById('tests').appendChild(testDiv);
+        }
+
+        async function runTests() {
+            // Initialize the WASM module
+            await init();
+
+            // Test 1: Levenshtein
+            addTest('1. Levenshtein Distance', () => {
+                const dist = elid.levenshtein("kitten", "sitting");
+                return {
+                    lines: [`levenshtein("kitten", "sitting") = ${dist}`],
+                    pass: dist === 3,
+                    reason: dist !== 3 ? `Expected 3, got ${dist}` : null
+                };
+            });
+
+            // Test 2: Normalized Levenshtein
+            addTest('2. Normalized Levenshtein', () => {
+                const norm = elid.normalizedLevenshtein("hello", "hello");
+                return {
+                    lines: [`normalizedLevenshtein("hello", "hello") = ${norm}`],
+                    pass: norm === 1.0,
+                    reason: norm !== 1.0 ? `Expected 1.0, got ${norm}` : null
+                };
+            });
+
+            // Test 3: Jaro-Winkler
+            addTest('3. Jaro-Winkler', () => {
+                const jw = elid.jaroWinkler("martha", "marhta");
+                return {
+                    lines: [`jaroWinkler("martha", "marhta") = ${jw.toFixed(3)}`],
+                    pass: jw > 0.9,
+                    reason: jw <= 0.9 ? `Expected > 0.9, got ${jw}` : null
+                };
+            });
+
+            // Test 4: SimHash
+            addTest('4. SimHash', () => {
+                const hash1 = elid.simhash("iPhone 14");
+                const hash2 = elid.simhash("iPhone 15");
+                const hash3 = elid.simhash("Galaxy S23");
+                const dist1 = elid.simhashDistance(hash1, hash2);
+                const dist2 = elid.simhashDistance(hash1, hash3);
+                return {
+                    lines: [
+                        `simhash("iPhone 14") = ${hash1}`,
+                        `simhash("iPhone 15") = ${hash2}`,
+                        `simhash("Galaxy S23") = ${hash3}`,
+                        `Distance iPhone 14 vs 15: ${dist1}`,
+                        `Distance iPhone 14 vs Galaxy: ${dist2}`
+                    ],
+                    pass: dist1 < dist2,
+                    reason: dist1 >= dist2 ? `Expected dist1 < dist2` : null
+                };
+            });
+
+            // Test 5: SimHash Similarity
+            addTest('5. SimHash Similarity', () => {
+                const sim = elid.simhashSimilarity("iPhone 14", "iPhone 15");
+                return {
+                    lines: [`simhashSimilarity("iPhone 14", "iPhone 15") = ${sim.toFixed(3)}`],
+                    pass: sim > 0.5,
+                    reason: sim <= 0.5 ? `Expected > 0.5, got ${sim}` : null
+                };
+            });
+
+            // Test 6: Find Best Match
+            addTest('6. Find Best Match', () => {
+                const candidates = ["apple", "application", "apply"];
+                const result = elid.findBestMatch("app", candidates);
+                return {
+                    lines: [`findBestMatch("app", [...]) = ${JSON.stringify(result)}`],
+                    pass: result.index >= 0 && result.score > 0.5,
+                    reason: !(result.index >= 0 && result.score > 0.5) ? 'Invalid result' : null
+                };
+            });
+
+            // Test 7: Find Matches Above Threshold
+            addTest('7. Find Matches Above Threshold', () => {
+                const candidates = ["apple", "application", "apply", "banana"];
+                const matches = elid.findMatchesAboveThreshold("app", candidates, 0.5);
+                return {
+                    lines: [
+                        `Found ${matches.length} matches above 0.5 threshold`,
+                        `Matches: ${JSON.stringify(matches.slice(0, 2))}...`
+                    ],
+                    pass: matches.length >= 2,
+                    reason: matches.length < 2 ? `Expected >= 2 matches, got ${matches.length}` : null
+                };
+            });
+
+            // Test 8: Hamming Distance
+            addTest('8. Hamming Distance', () => {
+                const ham = elid.hamming("karolin", "kathrin");
+                return {
+                    lines: [`hamming("karolin", "kathrin") = ${ham}`],
+                    pass: ham === 3,
+                    reason: ham !== 3 ? `Expected 3, got ${ham}` : null
+                };
+            });
+
+            // Test 9: OSA Distance
+            addTest('9. OSA Distance', () => {
+                const osa = elid.osaDistance("ca", "ac");
+                return {
+                    lines: [`osaDistance("ca", "ac") = ${osa}`],
+                    pass: osa === 1,
+                    reason: osa !== 1 ? `Expected 1, got ${osa}` : null
+                };
+            });
+
+            // Summary
+            const summary = document.getElementById('summary');
+            if (failed === 0) {
+                summary.className = 'all-pass';
+                summary.textContent = `✅ ALL ${passed} WEB TARGET TESTS PASSED!`;
+            } else {
+                summary.className = 'some-fail';
+                summary.textContent = `⚠️ ${passed} passed, ${failed} failed`;
+            }
+        }
+
+        runTests().catch(err => {
+            document.body.innerHTML = `<h1>Fatal Error</h1><p>${err.message}</p>`;
+        });
+    </script>
+</body>
+</html>

@@ -8,11 +8,14 @@
     "pkg"
   ],
   "scripts": {
-    "build": "wasm-pack build --target bundler --out-dir pkg",
-    "build:node": "wasm-pack build --target nodejs --out-dir pkg-node",
-    "build:web": "wasm-pack build --target web --out-dir pkg-web",
+    "build": "wasm-pack build --target bundler --out-dir pkg -- --features wasm",
+    "build:node": "wasm-pack build --target nodejs --out-dir pkg-node -- --features wasm",
+    "build:web": "wasm-pack build --target web --out-dir pkg-web -- --features wasm",
     "build:all": "npm run build && npm run build:node && npm run build:web",
     "test": "wasm-pack test --node --features wasm",
+    "test:node": "node test-wasm.js",
+    "test:bundler": "node test-wasm-bundler.mjs",
+    "test:all": "npm run test:node && npm run test:bundler",
     "pack": "wasm-pack pack pkg"
   },
   "repository": {
