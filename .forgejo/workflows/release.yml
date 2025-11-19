@@ -1,0 +1,346 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+jobs:
+  # Build Release Artifacts
+  build-rust:
+    name: Build Rust (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: libelid.so
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact_name: libelid.so
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: libelid.dylib
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: libelid.dylib
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          profile: minimal
+          override: true
+
+      - name: Install cross-compilation tools
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build release
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: rust-${{ matrix.target }}
+          path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+
+  # Build C FFI
+  build-c-ffi:
+    name: Build C FFI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Build C library
+        run: cargo build --release --features ffi
+
+      - name: Package C FFI
+        run: |
+          mkdir -p dist/c-ffi
+          cp elid.h dist/c-ffi/
+          if [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
+            cp target/release/libelid.so dist/c-ffi/
+          else
+            cp target/release/libelid.dylib dist/c-ffi/
+          fi
+          cp C_FFI_README.md dist/c-ffi/README.md
+
+      - name: Create tarball
+        run: |
+          cd dist
+          tar -czf elid-c-ffi-${{ matrix.os }}.tar.gz c-ffi/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: c-ffi-${{ matrix.os }}
+          path: dist/elid-c-ffi-${{ matrix.os }}.tar.gz
+
+  # Build WASM
+  build-wasm:
+    name: Build WASM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          profile: minimal
+          override: true
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build all WASM targets
+        run: npm run build:all
+
+      - name: Create WASM packages
+        run: |
+          mkdir -p dist/wasm
+          # Node.js package
+          cp -r pkg-node dist/wasm/
+          cd dist/wasm/pkg-node && tar -czf ../elid-wasm-nodejs.tar.gz . && cd ../../..
+          # Bundler package
+          cp -r pkg dist/wasm/
+          cd dist/wasm/pkg && tar -czf ../elid-wasm-bundler.tar.gz . && cd ../../..
+          # Web package
+          cp -r pkg-web dist/wasm/
+          cd dist/wasm/pkg-web && tar -czf ../elid-wasm-web.tar.gz . && cd ../../..
+
+      - name: Upload WASM artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: wasm-packages
+          path: dist/wasm/*.tar.gz
+
+  # Build Python Wheels
+  build-python:
+    name: Build Python Wheel (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python-version: ['3.9', '3.10', '3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install maturin
+        run: pip install maturin
+
+      - name: Build wheel
+        run: maturin build --release --features python
+
+      - name: Upload wheel
+        uses: actions/upload-artifact@v3
+        with:
+          name: python-wheels
+          path: target/wheels/*.whl
+
+  # Create GitHub/Forgejo Release
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build-rust, build-c-ffi, build-wasm, build-python]
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Display structure
+        run: ls -R artifacts/
+
+      - name: Create release notes
+        run: |
+          cat > release-notes.md << 'EOF'
+          # ELID ${{ github.ref_name }}
+
+          Multi-language string similarity library with blazing fast performance.
+
+          ## 🚀 Features
+
+          - ✅ Levenshtein distance (edit distance)
+          - ✅ Jaro-Winkler similarity (great for names)
+          - ✅ Hamming distance (equal-length strings)
+          - ✅ SimHash (database-queryable similarity)
+          - ✅ Zero external dependencies for core
+          - ✅ 1.4M+ operations/second
+
+          ## 📦 Packages
+
+          ### Rust
+          ```bash
+          cargo add elid
+          ```
+
+          ### JavaScript/WASM
+          ```bash
+          npm install elid-wasm
+          ```
+
+          ### Python
+          ```bash
+          pip install elid
+          ```
+
+          ### C/C++/Swift/Go
+          Download the C FFI package for your platform.
+
+          ## 🌍 Supported Languages
+
+          Rust • JavaScript • Python • C • C++ • Swift • Objective-C • Go • Ruby
+
+          ## 📚 Documentation
+
+          See [README.md](README.md) for complete documentation.
+
+          ## ⚡ Performance
+
+          - 1.4M+ operations/second
+          - Zero-copy algorithms
+          - Space-optimized O(min(m,n))
+          - Stable SimHash (FNV-1a)
+
+          EOF
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            artifacts/**/*
+          body_path: release-notes.md
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Publish to crates.io
+  publish-crates:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    needs: [build-rust]
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Publish to crates.io
+        run: cargo publish --token ${{ secrets.CARGO_TOKEN }}
+        continue-on-error: true
+
+  # Publish to npm
+  publish-npm:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+    needs: [build-wasm]
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+          profile: minimal
+          override: true
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Install Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Build WASM
+        run: npm run build
+
+      - name: Publish to npm
+        run: |
+          cd pkg
+          npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        continue-on-error: true
+
+  # Publish to PyPI
+  publish-pypi:
+    name: Publish to PyPI
+    runs-on: ubuntu-latest
+    needs: [build-python]
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Download wheels
+        uses: actions/download-artifact@v3
+        with:
+          name: python-wheels
+          path: dist/
+
+      - name: Install twine
+        run: pip install twine
+
+      - name: Publish to PyPI
+        run: twine upload dist/*.whl
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+        continue-on-error: true
