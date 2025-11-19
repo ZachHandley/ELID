@@ -9,11 +9,12 @@
 //! - **Jaro-Winkler Similarity**: Better for short strings like names
 //! - **Hamming Distance**: For equal-length strings
 //! - **Optimal String Alignment (OSA)**: Levenshtein with transpositions
+//! - **SimHash**: Locality-sensitive hashing for numeric similarity queries
 //!
 //! ## Example
 //!
 //! ```rust
-//! use elid::{levenshtein, normalized_levenshtein, jaro_winkler};
+//! use elid::{levenshtein, normalized_levenshtein, jaro_winkler, simhash, simhash_similarity};
 //!
 //! let distance = levenshtein("kitten", "sitting");
 //! assert_eq!(distance, 3);
@@ -23,6 +24,12 @@
 //!
 //! let jw_similarity = jaro_winkler("martha", "marhta");
 //! assert!(jw_similarity > 0.9);
+//!
+//! // SimHash for numeric database queries
+//! let hash1 = simhash("iPhone 14");
+//! let hash2 = simhash("iPhone 15");
+//! let sim = simhash_similarity("iPhone 14", "iPhone 15");
+//! assert!(sim > 0.8);
 //! ```
 
 #![deny(missing_docs)]
@@ -33,6 +40,7 @@ mod jaro_winkler;
 mod hamming;
 mod osa;
 mod common;
+mod simhash;
 
 #[cfg(feature = "wasm")]
 pub mod wasm;
@@ -44,6 +52,7 @@ pub use levenshtein::{levenshtein, normalized_levenshtein, levenshtein_with_opts
 pub use jaro_winkler::{jaro, jaro_winkler, jaro_winkler_with_prefix};
 pub use hamming::{hamming, normalized_hamming};
 pub use osa::{osa_distance, normalized_osa};
+pub use simhash::{simhash, simhash_distance, simhash_similarity, find_similar_hashes};
 
 /// Options for configuring string similarity algorithms
 #[derive(Debug, Clone, Copy)]

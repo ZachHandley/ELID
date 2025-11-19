@@ -258,6 +258,95 @@ pub fn levenshtein_with_opts(a: &str, b: &str, opts: SimilarityOptions) -> usize
     crate::levenshtein::levenshtein_with_opts(a, b, &rust_opts)
 }
 
+/// Compute the SimHash fingerprint of a string.
+///
+/// Returns a 64-bit hash where similar strings produce similar numbers.
+/// Use this for database queries by storing the hash and querying by numeric range.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { simhash } from 'elid';
+///
+/// const hash1 = simhash("iPhone 14");
+/// const hash2 = simhash("iPhone 15");
+/// const hash3 = simhash("Galaxy S23");
+///
+/// // hash1 and hash2 will be numerically close
+/// // hash3 will be numerically distant
+///
+/// // Store in database as bigint:
+/// // { name: "iPhone 14", simhash: hash1 }
+/// ```
+#[wasm_bindgen]
+pub fn simhash(text: &str) -> f64 {
+    // JavaScript doesn't have native u64, so we return as f64 (safe for 53 bits)
+    crate::simhash::simhash(text) as f64
+}
+
+/// Compute the Hamming distance between two SimHash values.
+///
+/// Returns the number of differing bits. Lower values = higher similarity.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { simhash, simhashDistance } from 'elid';
+///
+/// const hash1 = simhash("iPhone 14");
+/// const hash2 = simhash("iPhone 15");
+/// const distance = simhashDistance(hash1, hash2);
+///
+/// console.log(distance); // Low number = similar
+/// ```
+#[wasm_bindgen(js_name = simhashDistance)]
+pub fn simhash_distance(hash1: f64, hash2: f64) -> u32 {
+    crate::simhash::simhash_distance(hash1 as u64, hash2 as u64)
+}
+
+/// Compute the normalized SimHash similarity between two strings.
+///
+/// Returns a value between 0.0 (completely different) and 1.0 (identical).
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { simhashSimilarity } from 'elid';
+///
+/// const similarity = simhashSimilarity("iPhone 14", "iPhone 15");
+/// console.log(similarity); // ~0.9 (very similar)
+///
+/// const similarity2 = simhashSimilarity("iPhone", "Galaxy");
+/// console.log(similarity2); // ~0.4 (different)
+/// ```
+#[wasm_bindgen(js_name = simhashSimilarity)]
+pub fn simhash_similarity(a: &str, b: &str) -> f64 {
+    crate::simhash::simhash_similarity(a, b)
+}
+
+/// Find all hashes within a given distance threshold.
+///
+/// Useful for database queries - pre-compute hashes, then find similar ones.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { simhash, findSimilarHashes } from 'elid';
+///
+/// const candidates = ["iPhone 14 Pro", "iPhone 13", "Galaxy S23"];
+/// const hashes = candidates.map(s => simhash(s));
+///
+/// const queryHash = simhash("iPhone 14");
+/// const matches = findSimilarHashes(queryHash, hashes, 10);
+///
+/// console.log(matches); // [0, 1] - indices of similar items
+/// ```
+#[wasm_bindgen(js_name = findSimilarHashes)]
+pub fn find_similar_hashes(query_hash: f64, candidate_hashes: Vec<f64>, max_distance: u32) -> Vec<usize> {
+    let u64_hashes: Vec<u64> = candidate_hashes.iter().map(|&h| h as u64).collect();
+    crate::simhash::find_similar_hashes(query_hash as u64, &u64_hashes, max_distance)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

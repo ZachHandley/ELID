@@ -285,6 +285,95 @@ fn levenshtein_with_opts(a: &str, b: &str, opts: &SimilarityOpts) -> usize {
     crate::levenshtein::levenshtein_with_opts(a, b, &rust_opts)
 }
 
+/// Compute the SimHash fingerprint of a string.
+///
+/// Returns a 64-bit integer hash where similar strings produce similar numbers.
+/// Use this for database queries by storing the hash.
+///
+/// Args:
+///     text (str): Input string
+///
+/// Returns:
+///     int: 64-bit hash value
+///
+/// Example:
+///     >>> import elid
+///     >>> hash1 = elid.simhash("iPhone 14")
+///     >>> hash2 = elid.simhash("iPhone 15")
+///     >>> hash3 = elid.simhash("Galaxy S23")
+///     >>> # hash1 and hash2 will be numerically close
+///     >>> # hash3 will be different
+#[pyfunction]
+fn simhash(text: &str) -> u64 {
+    crate::simhash::simhash(text)
+}
+
+/// Compute the Hamming distance between two SimHash values.
+///
+/// Returns the number of differing bits. Lower values indicate higher similarity.
+///
+/// Args:
+///     hash1 (int): First SimHash value
+///     hash2 (int): Second SimHash value
+///
+/// Returns:
+///     int: Hamming distance (0-64)
+///
+/// Example:
+///     >>> import elid
+///     >>> hash1 = elid.simhash("iPhone 14")
+///     >>> hash2 = elid.simhash("iPhone 15")
+///     >>> distance = elid.simhash_distance(hash1, hash2)
+///     >>> distance  # Low number = similar
+#[pyfunction]
+fn simhash_distance(hash1: u64, hash2: u64) -> u32 {
+    crate::simhash::simhash_distance(hash1, hash2)
+}
+
+/// Compute the normalized SimHash similarity between two strings.
+///
+/// Returns a value between 0.0 (completely different) and 1.0 (identical).
+///
+/// Args:
+///     a (str): First string
+///     b (str): Second string
+///
+/// Returns:
+///     float: Similarity score between 0.0 and 1.0
+///
+/// Example:
+///     >>> import elid
+///     >>> similarity = elid.simhash_similarity("iPhone 14", "iPhone 15")
+///     >>> similarity  # ~0.9 (very similar)
+///     >>> similarity2 = elid.simhash_similarity("iPhone", "Galaxy")
+///     >>> similarity2  # ~0.4 (different)
+#[pyfunction]
+fn simhash_similarity(a: &str, b: &str) -> f64 {
+    crate::simhash::simhash_similarity(a, b)
+}
+
+/// Find all hashes within a given distance threshold.
+///
+/// Args:
+///     query_hash (int): The query SimHash value
+///     candidate_hashes (List[int]): List of candidate SimHash values
+///     max_distance (int): Maximum Hamming distance threshold
+///
+/// Returns:
+///     List[int]: Indices of candidates within the distance threshold
+///
+/// Example:
+///     >>> import elid
+///     >>> candidates = ["iPhone 14 Pro", "iPhone 13", "Galaxy S23"]
+///     >>> hashes = [elid.simhash(s) for s in candidates]
+///     >>> query_hash = elid.simhash("iPhone 14")
+///     >>> matches = elid.find_similar_hashes(query_hash, hashes, 10)
+///     >>> matches  # [0, 1] - indices of iPhone variants
+#[pyfunction]
+fn find_similar_hashes(query_hash: u64, candidate_hashes: Vec<u64>, max_distance: u32) -> Vec<usize> {
+    crate::simhash::find_similar_hashes(query_hash, &candidate_hashes, max_distance)
+}
+
 /// ELID - Efficient Levenshtein and String Similarity Library
 ///
 /// A fast library for computing various string similarity metrics.
@@ -300,6 +389,10 @@ fn elid(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(find_best_match, m)?)?;
     m.add_function(wrap_pyfunction!(find_matches_above_threshold, m)?)?;
     m.add_function(wrap_pyfunction!(levenshtein_with_opts, m)?)?;
+    m.add_function(wrap_pyfunction!(simhash, m)?)?;
+    m.add_function(wrap_pyfunction!(simhash_distance, m)?)?;
+    m.add_function(wrap_pyfunction!(simhash_similarity, m)?)?;
+    m.add_function(wrap_pyfunction!(find_similar_hashes, m)?)?;
     m.add_class::<SimilarityOpts>()?;
 
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
