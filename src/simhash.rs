@@ -49,6 +49,7 @@ pub fn simhash(text: &str) -> u64 {
         let hash = hash_string(&feature);
 
         // For each bit position
+        #[allow(clippy::needless_range_loop)]
         for i in 0..64 {
             let bit = (hash >> i) & 1;
             if bit == 1 {
@@ -61,6 +62,7 @@ pub fn simhash(text: &str) -> u64 {
 
     // Build final fingerprint
     let mut fingerprint: u64 = 0;
+    #[allow(clippy::needless_range_loop)]
     for i in 0..64 {
         if v[i] > 0 {
             fingerprint |= 1u64 << i;

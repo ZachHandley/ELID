@@ -45,6 +45,7 @@ pub fn osa_distance(a: &str, b: &str) -> usize {
     let mut matrix = vec![vec![0; b_len + 1]; a_len + 1];
 
     // Initialize first row and column
+    #[allow(clippy::needless_range_loop)]
     for i in 0..=a_len {
         matrix[i][0] = i;
     }
