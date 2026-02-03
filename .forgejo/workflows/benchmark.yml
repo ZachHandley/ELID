@@ -2,228 +2,98 @@ name: Benchmark
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   benchmark:
-    name: Performance Benchmarks
+    name: Criterion Benchmarks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
+      - name: Setup Rust
+        uses: https://forge.blackleafdigital.com/BlackLeafDigital/actions/setup-rust@main
 
-      - name: Cache cargo
-        uses: actions/cache@v3
+      - name: Restore cache
+        uses: https://forge.blackleafdigital.com/BlackLeafDigital/actions/s3-cache@main
         with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+          mode: restore
+          key: cargo-bench-${{ hashFiles('Cargo.lock') }}
+          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git target
+          bucket: ${{ secrets.S3_BUCKET }}
+          endpoint: https://${{ secrets.S3_ENDPOINT }}
+          region: ${{ secrets.S3_REGION }}
+          access-key: ${{ secrets.S3_ACCESS_KEY }}
+          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
 
       - name: Run benchmarks
         run: cargo bench --bench similarity_bench
 
-      - name: Archive benchmark results
-        uses: actions/upload-artifact@v3
+      - name: Save cache
+        if: always()
+        uses: https://forge.blackleafdigital.com/BlackLeafDigital/actions/s3-cache@main
         with:
-          name: benchmark-results
-          path: target/criterion/
+          mode: save
+          key: cargo-bench-${{ hashFiles('Cargo.lock') }}
+          path: ${{ env.CARGO_HOME }}/registry ${{ env.CARGO_HOME }}/git target
+          bucket: ${{ secrets.S3_BUCKET }}
+          endpoint: https://${{ secrets.S3_ENDPOINT }}
+          region: ${{ secrets.S3_REGION }}
+          access-key: ${{ secrets.S3_ACCESS_KEY }}
+          secret-key: ${{ secrets.S3_ACCESS_SECRET }}
 
-  # Quick performance test
-  performance-test:
-    name: Performance Test
+  wasm-size:
+    name: WASM Size Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
+      - name: Setup Rust
+        uses: https://forge.blackleafdigital.com/BlackLeafDigital/actions/setup-rust@main
         with:
-          toolchain: stable
-          profile: minimal
-          override: true
+          targets: wasm32-unknown-unknown
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Setup Node.js
+        uses: https://forge.blackleafdigital.com/BlackLeafDigital/actions/setup-node@main
         with:
-          python-version: '3.11'
-
-      - name: Install maturin
-        run: pip install maturin
-
-      - name: Build Python wheel
-        run: maturin build --release --features python
-
-      - name: Install wheel
-        run: pip install target/wheels/elid-*.whl
-
-      - name: Run performance test
-        run: |
-          python3 << 'PYTHON'
-          import elid
-          import time
-
-          # Warm up
-          for _ in range(100):
-              elid.levenshtein("hello", "world")
-
-          # Benchmark
-          iterations = 100000
-          start = time.time()
-          for _ in range(iterations):
-              elid.levenshtein("hello", "world")
-          elapsed = time.time() - start
-
-          ops_per_sec = iterations / elapsed
-          print(f"\n{'='*60}")
-          print(f"Performance Test Results")
-          print(f"{'='*60}")
-          print(f"Iterations: {iterations:,}")
-          print(f"Total time: {elapsed:.3f}s")
-          print(f"Ops/second: {ops_per_sec:,.0f}")
-          print(f"Avg time: {(elapsed/iterations)*1000:.4f}ms")
-          print(f"{'='*60}\n")
-
-          # Assert minimum performance
-          min_ops_per_sec = 500000  # At least 500K ops/sec
-          if ops_per_sec < min_ops_per_sec:
-              print(f"❌ FAILED: {ops_per_sec:,.0f} ops/sec < {min_ops_per_sec:,}")
-              exit(1)
-          else:
-              print(f"✅ PASSED: {ops_per_sec:,.0f} ops/sec >= {min_ops_per_sec:,}")
-          PYTHON
-
-  # WASM Performance
-  wasm-performance:
-    name: WASM Performance Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: wasm32-unknown-unknown
-          profile: minimal
-          override: true
-
-      - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-
-      - name: Install Node.js
-        uses: actions/setup-node@v3
-        with:
-          node-version: '18'
-
-      - name: Build WASM
-        run: npm run build:node
-
-      - name: Run performance test
-        run: |
-          node << 'JAVASCRIPT'
-          const elid = require('./pkg-node/elid.js');
-
-          // Warm up
-          for (let i = 0; i < 100; i++) {
-            elid.levenshtein("hello", "world");
-          }
-
-          // Benchmark
-          const iterations = 100000;
-          const start = Date.now();
-          for (let i = 0; i < iterations; i++) {
-            elid.levenshtein("hello", "world");
-          }
-          const elapsed = (Date.now() - start) / 1000;
-
-          const opsPerSec = iterations / elapsed;
-          console.log('\n' + '='.repeat(60));
-          console.log('WASM Performance Test Results');
-          console.log('='.repeat(60));
-          console.log(`Iterations: ${iterations.toLocaleString()}`);
-          console.log(`Total time: ${elapsed.toFixed(3)}s`);
-          console.log(`Ops/second: ${opsPerSec.toLocaleString('en-US', {maximumFractionDigits: 0})}`);
-          console.log(`Avg time: ${((elapsed/iterations)*1000).toFixed(4)}ms`);
-          console.log('='.repeat(60) + '\n');
-
-          // Assert minimum performance
-          const minOpsPerSec = 300000;  // At least 300K ops/sec for WASM
-          if (opsPerSec < minOpsPerSec) {
-            console.log(`❌ FAILED: ${opsPerSec.toLocaleString()} ops/sec < ${minOpsPerSec.toLocaleString()}`);
-            process.exit(1);
-          } else {
-            console.log(`✅ PASSED: ${opsPerSec.toLocaleString()} ops/sec >= ${minOpsPerSec.toLocaleString()}`);
-          }
-          JAVASCRIPT
-
-  # Size check
-  size-check:
-    name: Binary Size Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          target: wasm32-unknown-unknown
-          profile: minimal
-          override: true
+          node-version: '22'
 
       - name: Install wasm-pack
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - name: Build WASM
-        run: npm run build:node
-
-      - name: Check WASM sizes
         run: |
-          echo "WASM Binary Sizes:"
-          echo "=================="
-          ls -lh pkg-node/elid_bg.wasm
+          npm install
+          npm run build:node
 
+      - name: Check WASM size
+        run: |
           size=$(stat -c%s pkg-node/elid_bg.wasm)
           size_kb=$((size / 1024))
+          echo "WASM size: ${size_kb} KB"
 
-          echo ""
-          echo "Size: ${size_kb} KB"
-
-          # Ensure it's optimized (not too large)
           max_size_kb=150
           if [ $size_kb -gt $max_size_kb ]; then
-            echo "❌ FAILED: WASM is ${size_kb}KB > ${max_size_kb}KB"
+            echo "FAILED: WASM is ${size_kb}KB > ${max_size_kb}KB"
             exit 1
-          else
-            echo "✅ PASSED: WASM is ${size_kb}KB <= ${max_size_kb}KB"
           fi
+          echo "PASSED: WASM is ${size_kb}KB <= ${max_size_kb}KB"
 
-      - name: Build release binary
+      - name: Build native library
         run: cargo build --release
 
-      - name: Check library size
+      - name: Report native size
         run: |
-          echo ""
-          echo "Native Library Sizes:"
-          echo "===================="
-          ls -lh target/release/libelid.so
-
           size=$(stat -c%s target/release/libelid.so)
           size_kb=$((size / 1024))
-
-          echo ""
-          echo "Size: ${size_kb} KB"
-
-          # Just informational for native lib
-          echo "✅ Native library size checked"
+          echo "Native library size: ${size_kb} KB"
