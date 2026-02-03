@@ -183,7 +183,7 @@ jobs:
           python-version: '3.12'
 
       - name: Build Python wheel
-        run: uvx maturin build --release --features python --out dist
+        run: uv run maturin build --release --features python --out dist
 
       - name: Install wheel
         run: uv pip install dist/elid-*.whl

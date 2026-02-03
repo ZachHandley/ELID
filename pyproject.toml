@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Fast string similarity library for Python - Rust bindings for ELID"
 authors = [{name = "ELID Contributors"}]
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.8,<3.14"
 license = {text = "MIT OR Apache-2.0"}
 keywords = ["string-similarity", "levenshtein", "fuzzy-search", "fuzzy-matching", "jaro-winkler", "hamming", "distance", "rust"]
 classifiers = [
