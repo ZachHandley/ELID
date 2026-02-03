@@ -1,5 +1,5 @@
 // Quick test of ELID WASM bindings
-const elid = require('./pkg-node/elid');
+const elid = require('../../pkg-node/elid');
 
 console.log('Testing ELID WASM Bindings...\n');
 

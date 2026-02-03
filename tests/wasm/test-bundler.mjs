@@ -4,7 +4,7 @@
  * Uses ES modules (import syntax)
  */
 
-import * as elid from './pkg/elid.js';
+import * as elid from '../../pkg/elid.js';
 
 console.log("Testing ELID WASM Bundler Target...\n");
 

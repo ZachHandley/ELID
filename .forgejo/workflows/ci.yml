@@ -125,10 +125,10 @@ jobs:
         run: "cargo test --features ffi ffi::"
 
       - name: Compile C test
-        run: gcc tests/ffi/test-c-ffi.c -I. -L./target/release -lelid -o test-c-ffi-bin
+        run: gcc tests/ffi/test-c-ffi.c -I. -L${CARGO_TARGET_DIR:-./target}/release -lelid -o test-c-ffi-bin
 
       - name: Run C test
-        run: LD_LIBRARY_PATH=./target/release ./test-c-ffi-bin
+        run: LD_LIBRARY_PATH=${CARGO_TARGET_DIR:-./target}/release ./test-c-ffi-bin
 
   test-wasm:
     name: WASM Tests
@@ -182,14 +182,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install maturin
-        run: pip install maturin
-
       - name: Build Python wheel
-        run: maturin build --release --features python
+        run: uvx maturin build --release --features python --out dist
 
       - name: Install wheel
-        run: pip install target/wheels/elid-*.whl
+        run: uv pip install dist/elid-*.whl
 
       - name: Run Python tests
         run: python3 tests/python/test_bindings.py
