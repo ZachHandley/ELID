@@ -2,6 +2,10 @@
 //!
 //! This module provides Python bindings for all ELID functions.
 
+// PyO3 0.22 proc macros trigger false positive useless_conversion lints
+// See: https://github.com/rust-lang/rust-clippy/issues/12039
+#![allow(clippy::useless_conversion)]
+
 use pyo3::prelude::*;
 
 /// Compute the Levenshtein distance between two strings.
@@ -172,7 +176,7 @@ fn find_best_match(query: &str, candidates: Vec<String>) -> PyResult<PyObject> {
         let dict = pyo3::types::PyDict::new_bound(py);
         dict.set_item("index", idx)?;
         dict.set_item("score", score)?;
-        Ok(dict.into_py(py))
+        Ok(dict.unbind().into())
     })
 }
 
@@ -209,7 +213,7 @@ fn find_matches_above_threshold(
             dict.set_item("score", score)?;
             list.append(dict)?;
         }
-        Ok(list.into_py(py))
+        Ok(list.unbind().into())
     })
 }
 
@@ -371,7 +375,11 @@ fn simhash_similarity(a: &str, b: &str) -> f64 {
 ///     >>> matches = elid.find_similar_hashes(query_hash, hashes, 10)
 ///     >>> matches  # [0, 1] - indices of iPhone variants
 #[pyfunction]
-fn find_similar_hashes(query_hash: u64, candidate_hashes: Vec<u64>, max_distance: u32) -> Vec<usize> {
+fn find_similar_hashes(
+    query_hash: u64,
+    candidate_hashes: Vec<u64>,
+    max_distance: u32,
+) -> Vec<usize> {
     crate::simhash::find_similar_hashes(query_hash, &candidate_hashes, max_distance)
 }
 

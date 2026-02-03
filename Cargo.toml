@@ -5,7 +5,7 @@ edition = "2021"
 authors = ["ELID Contributors"]
 description = "A fast and efficient string similarity library"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/ZachHandley/ELID"
+repository = "https://forge.blackleafdigital.com/BlackLeafDigital/ELID"
 keywords = ["string", "similarity", "levenshtein", "fuzzy", "distance"]
 categories = ["algorithms", "text-processing"]
 

@@ -134,7 +134,11 @@ pub fn simhash_similarity(a: &str, b: &str) -> f64 {
 /// let matches = find_similar_hashes(query_hash, &candidate_hashes, 10);
 /// // Returns indices of candidates within Hamming distance 10
 /// ```
-pub fn find_similar_hashes(query_hash: u64, candidate_hashes: &[u64], max_distance: u32) -> Vec<usize> {
+pub fn find_similar_hashes(
+    query_hash: u64,
+    candidate_hashes: &[u64],
+    max_distance: u32,
+) -> Vec<usize> {
     candidate_hashes
         .iter()
         .enumerate()

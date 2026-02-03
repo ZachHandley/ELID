@@ -14,7 +14,6 @@
 
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
-use std::ptr;
 
 /// Represents a match result with index and score
 #[repr(C)]
@@ -40,14 +39,6 @@ unsafe fn c_str_to_rust(c_str: *const c_char) -> Option<&'static str> {
         return None;
     }
     CStr::from_ptr(c_str).to_str().ok()
-}
-
-/// Helper function to convert Rust string to C string
-fn rust_str_to_c(s: String) -> *mut c_char {
-    match CString::new(s) {
-        Ok(c_string) => c_string.into_raw(),
-        Err(_) => ptr::null_mut(),
-    }
 }
 
 /// Compute the Levenshtein distance between two strings.
@@ -285,13 +276,18 @@ pub unsafe extern "C" fn elid_free_match_array(array: ElidMatchArray) {
 /// The returned string does not need to be freed.
 #[no_mangle]
 pub extern "C" fn elid_version() -> *const c_char {
-    "0.1.0\0".as_ptr() as *const c_char
+    // cbindgen's syn 1.x can't parse c"" literals, so use allow here
+    #[allow(clippy::manual_c_str_literals)]
+    {
+        "0.1.0\0".as_ptr() as *const c_char
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::ffi::CString;
+    use std::ptr;
 
     #[test]
     fn test_ffi_levenshtein() {

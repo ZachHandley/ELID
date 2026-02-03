@@ -3,8 +3,8 @@
 //! This module provides JavaScript-friendly bindings for all ELID functions.
 //! These bindings work in browsers, Node.js, Deno, and Bun.
 
-use wasm_bindgen::prelude::*;
 use js_sys::{Object, Reflect};
+use wasm_bindgen::prelude::*;
 
 /// Compute the Levenshtein distance between two strings.
 ///
@@ -169,16 +169,22 @@ pub fn find_best_match(query: &str, candidates: Vec<String>) -> Object {
 /// console.log(matches); // [{ index: 0, score: 0.907 }, { index: 1, score: 0.830 }, ...]
 /// ```
 #[wasm_bindgen(js_name = findMatchesAboveThreshold)]
-pub fn find_matches_above_threshold(query: &str, candidates: Vec<String>, threshold: f64) -> JsValue {
+pub fn find_matches_above_threshold(
+    query: &str,
+    candidates: Vec<String>,
+    threshold: f64,
+) -> JsValue {
     let candidate_refs: Vec<&str> = candidates.iter().map(|s| s.as_str()).collect();
     let matches = crate::find_matches_above_threshold(query, &candidate_refs, threshold);
 
     let results: Vec<_> = matches
         .into_iter()
-        .map(|(idx, score)| serde_json::json!({
-            "index": idx,
-            "score": score
-        }))
+        .map(|(idx, score)| {
+            serde_json::json!({
+                "index": idx,
+                "score": score
+            })
+        })
         .collect();
 
     serde_wasm_bindgen::to_value(&results).unwrap()
@@ -196,6 +202,12 @@ pub struct SimilarityOptions {
     /// Prefix scale for Jaro-Winkler (default: 0.1, max: 0.25)
     #[wasm_bindgen(getter_with_clone)]
     pub prefix_scale: f64,
+}
+
+impl Default for SimilarityOptions {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[wasm_bindgen]
@@ -343,7 +355,11 @@ pub fn simhash_similarity(a: &str, b: &str) -> f64 {
 /// console.log(matches); // [0, 1] - indices of similar items
 /// ```
 #[wasm_bindgen(js_name = findSimilarHashes)]
-pub fn find_similar_hashes(query_hash: f64, candidate_hashes: Vec<f64>, max_distance: u32) -> Vec<usize> {
+pub fn find_similar_hashes(
+    query_hash: f64,
+    candidate_hashes: Vec<f64>,
+    max_distance: u32,
+) -> Vec<usize> {
     let u64_hashes: Vec<u64> = candidate_hashes.iter().map(|&h| h as u64).collect();
     crate::simhash::find_similar_hashes(query_hash as u64, &u64_hashes, max_distance)
 }

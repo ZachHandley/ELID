@@ -49,14 +49,18 @@ pub fn osa_distance(a: &str, b: &str) -> usize {
     for i in 0..=a_len {
         matrix[i][0] = i;
     }
-    for j in 0..=b_len {
-        matrix[0][j] = j;
+    for (j, val) in matrix[0].iter_mut().enumerate().take(b_len + 1) {
+        *val = j;
     }
 
     // Fill in the matrix
     for i in 1..=a_len {
         for j in 1..=b_len {
-            let cost = if a_chars[i - 1] == b_chars[j - 1] { 0 } else { 1 };
+            let cost = if a_chars[i - 1] == b_chars[j - 1] {
+                0
+            } else {
+                1
+            };
 
             let deletion = matrix[i - 1][j] + 1;
             let insertion = matrix[i][j - 1] + 1;
@@ -65,7 +69,8 @@ pub fn osa_distance(a: &str, b: &str) -> usize {
             let mut min_dist = deletion.min(insertion).min(substitution);
 
             // Check for transposition
-            if i > 1 && j > 1
+            if i > 1
+                && j > 1
                 && a_chars[i - 1] == b_chars[j - 2]
                 && a_chars[i - 2] == b_chars[j - 1]
             {

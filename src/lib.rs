@@ -35,11 +35,11 @@
 #![deny(missing_docs)]
 #![cfg_attr(not(feature = "ffi"), deny(unsafe_code))]
 
-mod levenshtein;
-mod jaro_winkler;
-mod hamming;
-mod osa;
 mod common;
+mod hamming;
+mod jaro_winkler;
+mod levenshtein;
+mod osa;
 mod simhash;
 
 #[cfg(feature = "wasm")]
@@ -51,11 +51,11 @@ pub mod python;
 #[cfg(feature = "ffi")]
 pub mod ffi;
 
-pub use levenshtein::{levenshtein, normalized_levenshtein, levenshtein_with_opts};
-pub use jaro_winkler::{jaro, jaro_winkler, jaro_winkler_with_prefix};
 pub use hamming::{hamming, normalized_hamming};
-pub use osa::{osa_distance, normalized_osa};
-pub use simhash::{simhash, simhash_distance, simhash_similarity, find_similar_hashes};
+pub use jaro_winkler::{jaro, jaro_winkler, jaro_winkler_with_prefix};
+pub use levenshtein::{levenshtein, levenshtein_with_opts, normalized_levenshtein};
+pub use osa::{normalized_osa, osa_distance};
+pub use simhash::{find_similar_hashes, simhash, simhash_distance, simhash_similarity};
 
 /// Options for configuring string similarity algorithms
 #[derive(Debug, Clone, Copy)]
@@ -133,7 +133,11 @@ pub fn find_best_match(query: &str, candidates: &[&str]) -> (usize, f64) {
 /// let matches = find_matches_above_threshold("app", &candidates, 0.5);
 /// assert!(matches.len() >= 2); // Should match at least "apple" and "apply"
 /// ```
-pub fn find_matches_above_threshold(query: &str, candidates: &[&str], threshold: f64) -> Vec<(usize, f64)> {
+pub fn find_matches_above_threshold(
+    query: &str,
+    candidates: &[&str],
+    threshold: f64,
+) -> Vec<(usize, f64)> {
     candidates
         .iter()
         .enumerate()

@@ -71,10 +71,16 @@ fn test_normalized_levenshtein_range() {
 fn test_jaro_comprehensive() {
     // Classic examples
     let sim = jaro("martha", "marhta");
-    assert!(sim > 0.9, "Jaro similarity for martha/marhta should be > 0.9");
+    assert!(
+        sim > 0.9,
+        "Jaro similarity for martha/marhta should be > 0.9"
+    );
 
     let sim = jaro("DIXON", "DICKSON");
-    assert!(sim > 0.7, "Jaro similarity for DIXON/DICKSON should be > 0.7");
+    assert!(
+        sim > 0.7,
+        "Jaro similarity for DIXON/DICKSON should be > 0.7"
+    );
 
     // Completely different strings
     let sim = jaro("abc", "xyz");
@@ -221,10 +227,7 @@ fn test_find_matches_above_threshold() {
 
     // All matches should have scores above the threshold
     for (_, score) in &matches {
-        assert!(
-            *score >= 0.5,
-            "All matches should have scores >= threshold"
-        );
+        assert!(*score >= 0.5, "All matches should have scores >= threshold");
     }
 
     // Test with high threshold
@@ -294,11 +297,7 @@ fn test_performance_on_long_strings() {
 #[test]
 fn test_symmetry() {
     // Test that distance metrics are symmetric
-    let test_pairs = vec![
-        ("hello", "world"),
-        ("abc", "xyz"),
-        ("test", "testing"),
-    ];
+    let test_pairs = vec![("hello", "world"), ("abc", "xyz"), ("test", "testing")];
 
     for (a, b) in test_pairs {
         assert_eq!(
@@ -317,10 +316,6 @@ fn test_symmetry() {
             osa_distance(b, a),
             "OSA should be symmetric"
         );
-        assert_eq!(
-            hamming(a, b),
-            hamming(b, a),
-            "Hamming should be symmetric"
-        );
+        assert_eq!(hamming(a, b), hamming(b, a), "Hamming should be symmetric");
     }
 }

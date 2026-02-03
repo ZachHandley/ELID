@@ -41,7 +41,9 @@ query = "app"
 
 result = elid.find_best_match(query, candidates)
 print(f"   Query: '{query}'")
-print(f"   Best match: '{candidates[result['index']]}' (score: {result['score']:.3f})\n")
+print(
+    f"   Best match: '{candidates[result['index']]}' (score: {result['score']:.3f})\n"
+)
 
 # Example 4: Finding all matches above threshold
 print("4. Finding All Matches Above Threshold:")
@@ -68,7 +70,11 @@ searches = ["iphone 14 pro", "galaxy", "pixel"]
 for search in searches:
     # Score all products
     scored = [
-        {"index": i, "product": product, "score": elid.best_match(search.lower(), product.lower())}
+        {
+            "index": i,
+            "product": product,
+            "score": elid.best_match(search.lower(), product.lower()),
+        }
         for i, product in enumerate(products)
     ]
 
@@ -130,7 +136,7 @@ misspellings = ["recieve", "beleive", "achive", "cieling"]
 
 for misspelling in misspellings:
     result = elid.find_best_match(misspelling, dictionary)
-    suggestion = dictionary[result['index']]
+    suggestion = dictionary[result["index"]]
     print(f"   '{misspelling}' → '{suggestion}' (confidence: {result['score']:.2%})")
 print()
 

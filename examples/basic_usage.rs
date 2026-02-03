@@ -47,11 +47,7 @@ fn main() {
 
     // Example 4: OSA Distance (with transpositions)
     println!("4. OSA Distance (handles transpositions):");
-    let pairs = vec![
-        ("ca", "ac"),
-        ("abcd", "acbd"),
-        ("hello", "hallo"),
-    ];
+    let pairs = vec![("ca", "ac"), ("abcd", "acbd"), ("hello", "hallo")];
 
     for (str1, str2) in pairs {
         let osa = osa_distance(str1, str2);
@@ -63,13 +59,7 @@ fn main() {
 
     // Example 5: Finding best match
     println!("5. Finding Best Match:");
-    let candidates = vec![
-        "apple",
-        "application",
-        "apply",
-        "apricot",
-        "banana",
-    ];
+    let candidates = vec!["apple", "application", "apply", "apricot", "banana"];
 
     let query = "app";
     let (idx, score) = find_best_match(query, &candidates);
@@ -109,11 +99,7 @@ fn main() {
 
     // Example 8: Unicode support
     println!("8. Unicode Support:");
-    let unicode_pairs = vec![
-        ("café", "cafe"),
-        ("你好", "您好"),
-        ("🎉🎊", "🎉"),
-    ];
+    let unicode_pairs = vec![("café", "cafe"), ("你好", "您好"), ("🎉🎊", "🎉")];
 
     for (str1, str2) in unicode_pairs {
         let dist = levenshtein(str1, str2);

@@ -54,7 +54,7 @@ print("6. Find Best Match:")
 candidates = ["apple", "application", "apply"]
 result = elid.find_best_match("app", candidates)
 print(f"   find_best_match('app', [...]) = {result}")
-assert result['index'] >= 0 and result['score'] > 0.5, "Find best match failed!"
+assert result["index"] >= 0 and result["score"] > 0.5, "Find best match failed!"
 print("   ✓ PASS\n")
 
 # Test 7: Find Matches Above Threshold

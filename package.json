@@ -13,14 +13,14 @@
     "build:web": "wasm-pack build --target web --out-dir pkg-web -- --features wasm",
     "build:all": "npm run build && npm run build:node && npm run build:web",
     "test": "wasm-pack test --node --features wasm",
-    "test:node": "node test-wasm.js",
-    "test:bundler": "node test-wasm-bundler.mjs",
+    "test:node": "node tests/wasm/test-node.js",
+    "test:bundler": "node tests/wasm/test-bundler.mjs",
     "test:all": "npm run test:node && npm run test:bundler",
     "pack": "wasm-pack pack pkg"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ZachHandley/ELID.git"
+    "url": "https://forge.blackleafdigital.com/BlackLeafDigital/ELID.git"
   },
   "keywords": [
     "string-similarity",
@@ -37,9 +37,9 @@
   "author": "ELID Contributors",
   "license": "(MIT OR Apache-2.0)",
   "bugs": {
-    "url": "https://github.com/ZachHandley/ELID/issues"
+    "url": "https://forge.blackleafdigital.com/BlackLeafDigital/ELID/issues"
   },
-  "homepage": "https://github.com/ZachHandley/ELID#readme",
+  "homepage": "https://forge.blackleafdigital.com/BlackLeafDigital/ELID#readme",
   "devDependencies": {
     "wasm-pack": "^0.12.0"
   }
