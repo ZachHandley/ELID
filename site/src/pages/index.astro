@@ -1,0 +1,158 @@
+---
+import Layout from "../layouts/Layout.astro";
+import AlgorithmComparison from "../components/AlgorithmComparison.vue";
+import LiveSearch from "../components/LiveSearch.vue";
+import SimHashVisualizer from "../components/SimHashVisualizer.vue";
+---
+
+<Layout title="ELID - String Similarity Playground">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
+    <!-- Header -->
+    <header class="text-center mb-12 sm:mb-16">
+      <h1
+        class="text-5xl sm:text-6xl lg:text-7xl font-bold tracking-tight mb-3"
+      >
+        <span class="text-elid-accent">ELID</span>
+      </h1>
+      <p
+        class="text-lg sm:text-xl text-elid-text-muted font-medium mb-6"
+      >
+        String Similarity Playground
+      </p>
+      <p
+        class="max-w-2xl mx-auto text-sm sm:text-base text-elid-text-muted/80 leading-relaxed"
+      >
+        Compare string similarity algorithms side by side. ELID is a Rust
+        library compiled to WebAssembly -- every computation runs entirely in
+        your browser. No data leaves your machine.
+      </p>
+      <div
+        class="flex items-center justify-center gap-3 mt-5 text-xs text-elid-text-muted/60"
+      >
+        <span
+          class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-elid-surface border border-elid-border/50 rounded-full"
+        >
+          <span class="w-1.5 h-1.5 rounded-full bg-elid-green animate-pulse"
+          ></span>
+          Rust + WASM
+        </span>
+        <span
+          class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-elid-surface border border-elid-border/50 rounded-full"
+        >
+          Client-Side Only
+        </span>
+        <span
+          class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-elid-surface border border-elid-border/50 rounded-full"
+        >
+          Zero Dependencies
+        </span>
+      </div>
+    </header>
+
+    <!-- Section 1: Algorithm Comparison -->
+    <section id="compare" class="mb-16">
+      <div class="flex items-center gap-3 mb-6">
+        <div
+          class="w-10 h-10 rounded-lg bg-elid-accent/10 flex items-center justify-center"
+        >
+          <span class="text-elid-accent text-lg font-bold">1</span>
+        </div>
+        <div>
+          <h2 class="text-xl sm:text-2xl font-bold">Algorithm Comparison</h2>
+          <p class="text-sm text-elid-text-muted">
+            Compare two strings across every algorithm in real time
+          </p>
+        </div>
+      </div>
+      <div
+        class="bg-elid-surface border border-elid-border/50 rounded-xl p-5 sm:p-6"
+      >
+        <AlgorithmComparison client:load />
+      </div>
+    </section>
+
+    <!-- Section 2: Live Search -->
+    <section id="search" class="mb-16">
+      <div class="flex items-center gap-3 mb-6">
+        <div
+          class="w-10 h-10 rounded-lg bg-elid-accent/10 flex items-center justify-center"
+        >
+          <span class="text-elid-accent text-lg font-bold">2</span>
+        </div>
+        <div>
+          <h2 class="text-xl sm:text-2xl font-bold">Fuzzy Search</h2>
+          <p class="text-sm text-elid-text-muted">
+            Search a list with typo tolerance and ranked results
+          </p>
+        </div>
+      </div>
+      <div
+        class="bg-elid-surface border border-elid-border/50 rounded-xl p-5 sm:p-6"
+      >
+        <LiveSearch client:load />
+      </div>
+    </section>
+
+    <!-- Section 3: SimHash Visualizer -->
+    <section id="simhash" class="mb-16">
+      <div class="flex items-center gap-3 mb-6">
+        <div
+          class="w-10 h-10 rounded-lg bg-elid-accent/10 flex items-center justify-center"
+        >
+          <span class="text-elid-accent text-lg font-bold">3</span>
+        </div>
+        <div>
+          <h2 class="text-xl sm:text-2xl font-bold">SimHash Visualizer</h2>
+          <p class="text-sm text-elid-text-muted">
+            See how similar strings produce similar 64-bit fingerprints
+          </p>
+        </div>
+      </div>
+      <div
+        class="bg-elid-surface border border-elid-border/50 rounded-xl p-5 sm:p-6"
+      >
+        <SimHashVisualizer client:load />
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer
+      class="border-t border-elid-border/30 pt-8 pb-12 text-center text-sm text-elid-text-muted"
+    >
+      <p class="mb-3">
+        Built with
+        <span class="text-elid-text">Rust</span>,
+        <span class="text-elid-text">WebAssembly</span>,
+        <span class="text-elid-text">Astro</span>, and
+        <span class="text-elid-text">Vue</span>.
+      </p>
+      <div class="flex items-center justify-center gap-4">
+        <a
+          href="https://forge.blackleafdigital.com/BlackLeafDigital/ELID"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-2 px-4 py-2 bg-elid-surface border border-elid-border/50 rounded-lg hover:border-elid-accent hover:text-elid-accent transition-colors"
+        >
+          Source Code
+          <svg
+            class="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+            ></path>
+          </svg>
+        </a>
+      </div>
+      <p class="mt-4 text-xs text-elid-text-muted/50">
+        All computations run client-side via WASM. No data is sent to any
+        server.
+      </p>
+    </footer>
+  </div>
+</Layout>
