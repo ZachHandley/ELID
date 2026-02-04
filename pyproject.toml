@@ -35,6 +35,9 @@ Issues = "https://github.com/ZachHandley/ELID/issues"
 [tool.maturin]
 features = ["python"]
 module-name = "elid"
+include = [
+    { path = "elid.pyi", format = "wheel" },
+]
 
 [dependency-groups]
 dev = [
