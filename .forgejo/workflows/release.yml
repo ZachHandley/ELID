@@ -26,6 +26,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Stamp version
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json pyproject.toml README.md
@@ -53,6 +54,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Stamp version
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json pyproject.toml README.md
@@ -96,6 +98,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Stamp version
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json pyproject.toml README.md
@@ -178,6 +181,7 @@ jobs:
           fetch-depth: 0
 
       - name: Stamp version
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json pyproject.toml README.md
@@ -223,6 +227,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Stamp version
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json pyproject.toml README.md
@@ -244,6 +249,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Stamp version
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json pyproject.toml README.md
