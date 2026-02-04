@@ -35,3 +35,8 @@ Issues = "https://forge.blackleafdigital.com/BlackLeafDigital/ELID/issues"
 [tool.maturin]
 features = ["python"]
 module-name = "elid"
+
+[dependency-groups]
+dev = [
+    "maturin>=1.11.5",
+]
