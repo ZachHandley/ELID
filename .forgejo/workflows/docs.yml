@@ -164,6 +164,7 @@ jobs:
           cd site
           rm -rf dist
           ASTRO_SITE=https://zachhandley.github.io ASTRO_BASE=/ELID pnpm run build
+          touch dist/.nojekyll
 
       - name: Push dist to GitHub docs branch
         run: |
