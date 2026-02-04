@@ -57,7 +57,8 @@ async function loadWasm(): Promise<boolean> {
   try {
     // Construct the URL at runtime so Vite/Rollup does NOT try to resolve
     // this import at build time (the WASM files may not exist yet).
-    const wasmPath = "/wasm/elid.js";
+    const base = import.meta.env.BASE_URL ?? "/";
+    const wasmPath = `${base}wasm/elid.js`;
     const mod = (await import(/* @vite-ignore */ wasmPath)) as ElidWasmModule;
     await mod.default();
     wasmModule = mod;
