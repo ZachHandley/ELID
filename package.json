@@ -1,6 +1,6 @@
 {
   "name": "elid-wasm",
-  "version": "0.1.0",
+  "version": "0.0.0-dev",
   "description": "Fast string similarity library for JavaScript - WebAssembly bindings for ELID",
   "main": "pkg/elid.js",
   "types": "pkg/elid.d.ts",

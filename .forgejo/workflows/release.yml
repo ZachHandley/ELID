@@ -25,6 +25,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Stamp version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json pyproject.toml README.md
+          sed -i "s/0\.0\.0-dev/${VERSION}/g" src/ffi.rs
+
       - name: Setup Rust
         uses: https://forge.blackleafdigital.com/BlackLeafDigital/actions/setup-rust@main
         with:
@@ -45,6 +51,12 @@ jobs:
     needs: [build-test]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Stamp version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json pyproject.toml README.md
+          sed -i "s/0\.0\.0-dev/${VERSION}/g" src/ffi.rs
 
       - name: Setup Rust
         uses: https://forge.blackleafdigital.com/BlackLeafDigital/actions/setup-rust@main
@@ -82,6 +94,12 @@ jobs:
     needs: [build-test]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Stamp version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json pyproject.toml README.md
+          sed -i "s/0\.0\.0-dev/${VERSION}/g" src/ffi.rs
 
       - name: Setup Rust
         uses: https://forge.blackleafdigital.com/BlackLeafDigital/actions/setup-rust@main
@@ -159,6 +177,12 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Stamp version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json pyproject.toml README.md
+          sed -i "s/0\.0\.0-dev/${VERSION}/g" src/ffi.rs
+
       - name: Prepare GitHub Actions workflows
         run: |
           mkdir -p .github/workflows
@@ -183,7 +207,7 @@ jobs:
         run: |
           git config user.name "Zach Handley"
           git config user.email "zachhandley@gmail.com"
-          git add .github/workflows/ README.md
+          git add -A
           git commit -m "Release ${GITHUB_REF_NAME} with GitHub Actions workflows"
           git remote add github https://x-access-token:${{ secrets.GH_ACCESS_TOKEN }}@github.com/zachhandley/elid.git
           TAG="${GITHUB_REF_NAME}"
@@ -197,6 +221,12 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
+
+      - name: Stamp version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json pyproject.toml README.md
+          sed -i "s/0\.0\.0-dev/${VERSION}/g" src/ffi.rs
 
       - name: Setup Rust
         uses: https://forge.blackleafdigital.com/BlackLeafDigital/actions/setup-rust@main
@@ -212,6 +242,12 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
+
+      - name: Stamp version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json pyproject.toml README.md
+          sed -i "s/0\.0\.0-dev/${VERSION}/g" src/ffi.rs
 
       - name: Setup Rust
         uses: https://forge.blackleafdigital.com/BlackLeafDigital/actions/setup-rust@main

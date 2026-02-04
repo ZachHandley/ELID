@@ -24,7 +24,7 @@ A fast, zero-dependency Rust library for computing string similarity metrics wit
 
 ```toml
 [dependencies]
-elid = "0.1.0"
+elid = "0.0.0-dev"
 ```
 
 ### Python

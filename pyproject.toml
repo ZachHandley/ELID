@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "elid"
-version = "0.1.0"
+version = "0.0.0-dev"
 description = "Fast string similarity library for Python - Rust bindings for ELID"
 authors = [{name = "ELID Contributors"}]
 readme = "README.md"

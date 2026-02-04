@@ -1,6 +1,6 @@
 [package]
 name = "elid"
-version = "0.1.0"
+version = "0.0.0-dev"
 edition = "2021"
 authors = ["ELID Contributors"]
 description = "A fast and efficient string similarity library"
