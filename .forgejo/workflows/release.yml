@@ -57,18 +57,13 @@ jobs:
           node-version: '22'
 
       - name: Install wasm-pack
-        run: |
-          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-          export PATH="$HOME/.cargo/bin:$PATH"
-          wasm-pack --version
+        run: cargo install wasm-pack
 
       - name: Install dependencies
         run: npm install
 
       - name: Build all WASM targets
-        run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
-          npm run build:all
+        run: npm run build:all
 
       - name: Package WASM artifacts
         run: |
@@ -191,14 +186,10 @@ jobs:
           node-version: '22'
 
       - name: Install wasm-pack
-        run: |
-          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-          export PATH="$HOME/.cargo/bin:$PATH"
-          wasm-pack --version
+        run: cargo install wasm-pack
 
       - name: Build and publish WASM
         run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
           npm install
           npm run build
           cd pkg

@@ -85,15 +85,10 @@ jobs:
           node-version: '22'
 
       - name: Install wasm-pack
-        run: |
-          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
-          export PATH="$HOME/.cargo/bin:$PATH"
-          wasm-pack --version
+        run: cargo install wasm-pack
 
       - name: Build WASM for demo site
-        run: |
-          export PATH="$HOME/.cargo/bin:$PATH"
-          wasm-pack build --target web --out-dir site/public/wasm -- --features wasm
+        run: wasm-pack build --target web --out-dir site/public/wasm -- --features wasm
 
       - name: Build demo site
         run: |
