@@ -149,6 +149,21 @@ jobs:
             "${{ github.server_url }}/api/v1/repos/${{ github.repository }}/releases" \
             -d "$(jq -n --arg tag "$TAG" --arg body "$BODY" --arg name "ELID $TAG" '{tag_name: $tag, name: $name, body: $body, draft: false, prerelease: false}')"
 
+  sync-github:
+    name: Sync to GitHub
+    runs-on: ubuntu-latest
+    needs: [build-test]
+    if: startsWith(github.ref, 'refs/tags/')
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Push tag and releases branch to GitHub
+        run: |
+          git remote add github https://x-access-token:${{ secrets.GH_ACCESS_TOKEN }}@github.com/zachhandley/elid.git
+          TAG="${GITHUB_REF_NAME}"
+          git push github "refs/tags/${TAG}"
+          git push github "HEAD:refs/heads/releases" --force
+
   publish-crates:
     name: Publish to crates.io
     runs-on: ubuntu-latest
