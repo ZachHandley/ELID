@@ -156,12 +156,14 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Push tag and releases branch to GitHub
         run: |
           git remote add github https://x-access-token:${{ secrets.GH_ACCESS_TOKEN }}@github.com/zachhandley/elid.git
           TAG="${GITHUB_REF_NAME}"
-          git push github "refs/tags/${TAG}"
+          git push github "refs/tags/${TAG}" --force
           git push github "HEAD:refs/heads/releases" --force
 
   publish-crates:
