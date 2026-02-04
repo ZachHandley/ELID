@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Demo site version (e.g., 0.1.0). Auto-increments if empty.'
+        description: 'Docs version (e.g., 0.1.0). Auto-increments if empty.'
         required: false
         type: string
 
@@ -93,100 +93,46 @@ jobs:
       - name: Build WASM for demo site
         run: pnpm exec wasm-pack build --target web --out-dir site/public/wasm -- --features wasm
 
-      - name: Upload WASM artifact
-        uses: https://github.com/christopherhx/gitea-upload-artifact@v4
-        with:
-          name: site-wasm
-          path: site/public/wasm/
-          retention-days: 1
-
-      - name: Build demo site
-        run: |
-          cd site
-          pnpm install
-          pnpm run build
-
       - name: Determine version
         id: version
         run: |
           INPUT_VERSION="${{ inputs.version }}"
           if [ -n "$INPUT_VERSION" ]; then
-            # Strip leading 'v' if present
             VERSION="${INPUT_VERSION#v}"
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "Using provided version: $VERSION"
+          elif [[ "$GITHUB_REF_NAME" == docs-v* ]]; then
+            VERSION="${GITHUB_REF_NAME#docs-v}"
           else
-            # Auto-increment: find latest demo-release-v* branch
-            LATEST=$(git branch -r --list 'origin/demo-release-v*' | \
-              sed 's|.*demo-release-v||' | \
-              sort -t. -k1,1n -k2,2n -k3,3n | \
-              tail -1)
-
+            LATEST=$(git tag -l 'docs-v*' | sed 's/docs-v//' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
             if [ -z "$LATEST" ]; then
               VERSION="0.0.1"
             else
               MAJOR=$(echo "$LATEST" | cut -d. -f1)
               MINOR=$(echo "$LATEST" | cut -d. -f2)
               PATCH=$(echo "$LATEST" | cut -d. -f3)
-              PATCH=$((PATCH + 1))
-              VERSION="${MAJOR}.${MINOR}.${PATCH}"
+              VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
             fi
-            echo "version=$VERSION" >> $GITHUB_OUTPUT
-            echo "Auto-incremented version: $VERSION"
           fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Docs version: $VERSION"
 
-      - name: Create docker-compose.yml
-        run: |
-          cat > site/dist/docker-compose.yml << 'DEOF'
-          services:
-            demo:
-              image: nginx:alpine
-              ports:
-                - "8080:80"
-              volumes:
-                - ./:/usr/share/nginx/html:ro
-              restart: unless-stopped
-          DEOF
-
-      - name: Deploy to branch
-        run: |
-          VERSION="${{ steps.version.outputs.version }}"
-          BRANCH="demo-release-v${VERSION}"
-
-          cd site/dist
-
-          git init
-          git checkout --orphan "$BRANCH"
-          git add -A
-          git -c user.name="Zach Handley" -c user.email="zachhandley@gmail.com" \
-            commit -m "Demo site v${VERSION}"
-
-          git remote add origin "${{ github.server_url }}/${{ github.repository }}.git"
-          git push -f "https://x-access-token:${{ secrets.FORGEJO_ACTIONS_TOKEN }}@$(echo '${{ github.server_url }}' | sed 's|https://||')/${{ github.repository }}.git" "$BRANCH"
-
-          echo "Deployed demo site to branch: $BRANCH"
-
-      - name: Download WASM artifact
-        uses: https://github.com/christopherhx/gitea-download-artifact@v4
-        with:
-          name: site-wasm
-          path: site/public/wasm
-
-      - name: Build demo site for GitHub Pages
+      - name: Build demo site
         run: |
           cd site
-          rm -rf dist
+          pnpm install
           ASTRO_SITE=https://zachhandley.github.io ASTRO_BASE=/ELID pnpm run build
           touch dist/.nojekyll
           cp dist/index.html dist/404.html
 
-      - name: Push dist to GitHub docs branch
+      - name: Push to GitHub docs branch with tag
         run: |
+          VERSION="${{ steps.version.outputs.version }}"
           cd site/dist
           git init
           git checkout --orphan docs
           git add -A
           git -c user.name="Zach Handley" -c user.email="zachhandley@gmail.com" \
-            commit -m "Docs site ${GITHUB_REF_NAME:-manual}"
+            commit -m "Docs site v${VERSION}"
+          git tag "docs-v${VERSION}"
           git remote add github https://x-access-token:${{ secrets.GH_ACCESS_TOKEN }}@github.com/zachhandley/elid.git
           git push github docs --force
+          git push github "docs-v${VERSION}"
