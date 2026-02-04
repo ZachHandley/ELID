@@ -1,0 +1,35 @@
+/* tslint:disable */
+/* eslint-disable */
+export const memory: WebAssembly.Memory;
+export const __wbg_get_similarityoptions_case_sensitive: (a: number) => number;
+export const __wbg_get_similarityoptions_prefix_scale: (a: number) => number;
+export const __wbg_get_similarityoptions_trim_whitespace: (a: number) => number;
+export const __wbg_set_similarityoptions_case_sensitive: (a: number, b: number) => void;
+export const __wbg_set_similarityoptions_prefix_scale: (a: number, b: number) => void;
+export const __wbg_set_similarityoptions_trim_whitespace: (a: number, b: number) => void;
+export const __wbg_similarityoptions_free: (a: number, b: number) => void;
+export const bestMatch: (a: number, b: number, c: number, d: number) => number;
+export const findBestMatch: (a: number, b: number, c: number, d: number) => any;
+export const findMatchesAboveThreshold: (a: number, b: number, c: number, d: number, e: number) => any;
+export const findSimilarHashes: (a: number, b: number, c: number, d: number) => [number, number];
+export const hamming: (a: number, b: number, c: number, d: number) => number;
+export const jaro: (a: number, b: number, c: number, d: number) => number;
+export const jaroWinkler: (a: number, b: number, c: number, d: number) => number;
+export const levenshtein: (a: number, b: number, c: number, d: number) => number;
+export const levenshteinWithOpts: (a: number, b: number, c: number, d: number, e: number) => number;
+export const normalizedLevenshtein: (a: number, b: number, c: number, d: number) => number;
+export const osaDistance: (a: number, b: number, c: number, d: number) => number;
+export const simhash: (a: number, b: number) => number;
+export const simhashDistance: (a: number, b: number) => number;
+export const simhashSimilarity: (a: number, b: number, c: number, d: number) => number;
+export const similarityoptions_new: () => number;
+export const similarityoptions_setCaseSensitive: (a: number, b: number) => void;
+export const similarityoptions_setPrefixScale: (a: number, b: number) => void;
+export const similarityoptions_setTrimWhitespace: (a: number, b: number) => void;
+export const __wbindgen_malloc: (a: number, b: number) => number;
+export const __wbindgen_realloc: (a: number, b: number, c: number, d: number) => number;
+export const __wbindgen_exn_store: (a: number) => void;
+export const __externref_table_alloc: () => number;
+export const __wbindgen_externrefs: WebAssembly.Table;
+export const __wbindgen_free: (a: number, b: number, c: number) => void;
+export const __wbindgen_start: () => void;
