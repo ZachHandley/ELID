@@ -2,6 +2,11 @@ name: Documentation
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Demo site version (e.g., 0.1.0). Auto-increments if empty.'
+        required: false
+        type: string
 
 concurrency:
   group: docs-${{ github.ref }}
@@ -21,17 +26,26 @@ jobs:
         uses: https://forge.blackleafdigital.com/BlackLeafDigital/actions/setup-rust@main
 
       - name: Build docs
-        run: cargo doc --all-features --no-deps
+        run: cargo doc --features ffi,wasm --no-deps
 
       - name: Create redirect index
         run: |
-          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=elid/index.html"></head></html>' > target/doc/index.html
+          DOC_DIR="${CARGO_TARGET_DIR:-./target}/doc"
+          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=elid/index.html"></head></html>' > "$DOC_DIR/index.html"
 
       - name: Upload documentation
+        run: |
+          DOC_DIR="${CARGO_TARGET_DIR:-./target}/doc"
+          echo "DOC_DIR=$DOC_DIR" >> $GITHUB_ENV
+        # Can't use env vars in 'with', so copy to a known location
+      - name: Stage docs for upload
+        run: cp -r "${CARGO_TARGET_DIR:-./target}/doc" ./docs-output
+
+      - name: Upload documentation artifact
         uses: https://github.com/christopherhx/gitea-upload-artifact@v4
         with:
           name: rust-docs
-          path: target/doc/
+          path: docs-output/
           retention-days: 30
 
   c-header:
@@ -52,10 +66,13 @@ jobs:
           echo "elid.h generated: $(stat -c%s elid.h) bytes"
 
   demo-site:
-    name: Build Demo Site
+    name: Build & Deploy Demo Site
     runs-on: ubuntu-latest
+    needs: [rustdoc]
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Rust
         uses: https://forge.blackleafdigital.com/BlackLeafDigital/actions/setup-rust@main
@@ -68,10 +85,15 @@ jobs:
           node-version: '22'
 
       - name: Install wasm-pack
-        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+        run: |
+          curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+          export PATH="$HOME/.cargo/bin:$PATH"
+          wasm-pack --version
 
       - name: Build WASM for demo site
-        run: wasm-pack build --target web --out-dir site/public/wasm -- --features wasm
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          wasm-pack build --target web --out-dir site/public/wasm -- --features wasm
 
       - name: Build demo site
         run: |
@@ -79,9 +101,62 @@ jobs:
           npm install
           npm run build
 
-      - name: Upload demo site
-        uses: https://github.com/christopherhx/gitea-upload-artifact@v4
-        with:
-          name: demo-site
-          path: site/dist/
-          retention-days: 30
+      - name: Determine version
+        id: version
+        run: |
+          INPUT_VERSION="${{ inputs.version }}"
+          if [ -n "$INPUT_VERSION" ]; then
+            # Strip leading 'v' if present
+            VERSION="${INPUT_VERSION#v}"
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "Using provided version: $VERSION"
+          else
+            # Auto-increment: find latest demo-release-v* branch
+            LATEST=$(git branch -r --list 'origin/demo-release-v*' | \
+              sed 's|.*demo-release-v||' | \
+              sort -t. -k1,1n -k2,2n -k3,3n | \
+              tail -1)
+
+            if [ -z "$LATEST" ]; then
+              VERSION="0.0.1"
+            else
+              MAJOR=$(echo "$LATEST" | cut -d. -f1)
+              MINOR=$(echo "$LATEST" | cut -d. -f2)
+              PATCH=$(echo "$LATEST" | cut -d. -f3)
+              PATCH=$((PATCH + 1))
+              VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            fi
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "Auto-incremented version: $VERSION"
+          fi
+
+      - name: Create docker-compose.yml
+        run: |
+          cat > site/dist/docker-compose.yml << 'DEOF'
+          services:
+            demo:
+              image: nginx:alpine
+              ports:
+                - "8080:80"
+              volumes:
+                - ./:/usr/share/nginx/html:ro
+              restart: unless-stopped
+          DEOF
+
+      - name: Deploy to branch
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          BRANCH="demo-release-v${VERSION}"
+
+          cd site/dist
+
+          git init
+          git checkout --orphan "$BRANCH"
+          git add -A
+          git -c user.name="Zach Handley" -c user.email="zachhandley@gmail.com" \
+            commit -m "Demo site v${VERSION}"
+
+          git remote add origin "${{ github.server_url }}/${{ github.repository }}.git"
+          git push -f "https://x-access-token:${{ secrets.FORGEJO_ACTIONS_TOKEN }}@$(echo '${{ github.server_url }}' | sed 's|https://||')/${{ github.repository }}.git" "$BRANCH"
+
+          echo "Deployed demo site to branch: $BRANCH"

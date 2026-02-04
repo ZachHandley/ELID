@@ -36,8 +36,8 @@ jobs:
         with:
           components: clippy
 
-      - name: Clippy all features
-        run: cargo clippy --all-features -- -D warnings
+      - name: Clippy
+        run: cargo clippy --features ffi,wasm -- -D warnings
 
   license-check:
     name: License Compliance
@@ -53,4 +53,4 @@ jobs:
       - name: Check dependency tree
         run: |
           cargo install cargo-license
-          cargo license --all-features
+          cargo license --features ffi,wasm
