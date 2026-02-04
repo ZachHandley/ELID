@@ -102,7 +102,11 @@ jobs:
           elif [[ "$GITHUB_REF_NAME" == docs-v* ]]; then
             VERSION="${GITHUB_REF_NAME#docs-v}"
           else
-            LATEST=$(git tag -l 'docs-v*' | sed 's/docs-v//' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
+            # Fetch tags from GitHub to find latest
+            LATEST=$(git ls-remote --tags https://x-access-token:${{ secrets.GH_ACCESS_TOKEN }}@github.com/zachhandley/elid.git 'refs/tags/docs-v*' | \
+              sed 's/.*refs\/tags\/docs-v//' | \
+              sort -t. -k1,1n -k2,2n -k3,3n | \
+              tail -1)
             if [ -z "$LATEST" ]; then
               VERSION="0.0.1"
             else
