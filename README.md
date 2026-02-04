@@ -1,6 +1,6 @@
 # ELID - Efficient Levenshtein and String Similarity Library
 
-[![CI](https://forge.blackleafdigital.com/BlackLeafDigital/ELID/actions/workflows/ci.yml/badge.svg)](https://forge.blackleafdigital.com/BlackLeafDigital/ELID/actions)
+[![CI](https://github.com/ZachHandley/ELID/actions/workflows/ci.yml/badge.svg)](https://github.com/ZachHandley/ELID/actions)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
 
 A fast, zero-dependency Rust library for computing string similarity metrics with bindings for Python, JavaScript (WASM), and C.
@@ -112,7 +112,7 @@ let distance = levenshtein_with_opts("  HELLO  ", "hello", &opts); // 0
 ## Building
 
 ```bash
-git clone https://forge.blackleafdigital.com/BlackLeafDigital/ELID.git
+git clone https://github.com/ZachHandley/ELID.git
 cd ELID
 
 cargo build --release

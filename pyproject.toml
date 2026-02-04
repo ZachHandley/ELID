@@ -6,7 +6,7 @@ build-backend = "maturin"
 name = "elid"
 version = "0.0.0-dev"
 description = "Fast string similarity library for Python - Rust bindings for ELID"
-authors = [{name = "ELID Contributors"}]
+authors = [{name = "Zach Handley", email = "zachhandley@gmail.com"}]
 readme = "README.md"
 requires-python = ">=3.8,<3.14"
 license = {text = "MIT OR Apache-2.0"}
@@ -28,9 +28,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://forge.blackleafdigital.com/BlackLeafDigital/ELID"
-Repository = "https://forge.blackleafdigital.com/BlackLeafDigital/ELID"
-Issues = "https://forge.blackleafdigital.com/BlackLeafDigital/ELID/issues"
+Homepage = "https://github.com/ZachHandley/ELID"
+Repository = "https://github.com/ZachHandley/ELID"
+Issues = "https://github.com/ZachHandley/ELID/issues"
 
 [tool.maturin]
 features = ["python"]

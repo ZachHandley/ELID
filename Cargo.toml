@@ -2,10 +2,10 @@
 name = "elid"
 version = "0.0.0-dev"
 edition = "2021"
-authors = ["ELID Contributors"]
+authors = ["Zach Handley <zachhandley@gmail.com>"]
 description = "A fast and efficient string similarity library"
 license = "MIT OR Apache-2.0"
-repository = "https://forge.blackleafdigital.com/BlackLeafDigital/ELID"
+repository = "https://github.com/ZachHandley/ELID"
 keywords = ["string", "similarity", "levenshtein", "fuzzy", "distance"]
 categories = ["algorithms", "text-processing"]
 

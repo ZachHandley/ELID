@@ -20,7 +20,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://forge.blackleafdigital.com/BlackLeafDigital/ELID.git"
+    "url": "https://github.com/ZachHandley/ELID.git"
   },
   "keywords": [
     "string-similarity",
@@ -34,12 +34,12 @@
     "webassembly",
     "rust"
   ],
-  "author": "ELID Contributors",
+  "author": "Zach Handley <zachhandley@gmail.com>",
   "license": "(MIT OR Apache-2.0)",
   "bugs": {
-    "url": "https://forge.blackleafdigital.com/BlackLeafDigital/ELID/issues"
+    "url": "https://github.com/ZachHandley/ELID/issues"
   },
-  "homepage": "https://forge.blackleafdigital.com/BlackLeafDigital/ELID#readme",
+  "homepage": "https://github.com/ZachHandley/ELID#readme",
   "devDependencies": {
     "wasm-pack": "^0.12.0"
   },
