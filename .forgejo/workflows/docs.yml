@@ -88,16 +88,16 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm install
+        run: pnpm install
 
       - name: Build WASM for demo site
-        run: npx wasm-pack build --target web --out-dir site/public/wasm -- --features wasm
+        run: pnpm exec wasm-pack build --target web --out-dir site/public/wasm -- --features wasm
 
       - name: Build demo site
         run: |
           cd site
-          npm install
-          npm run build
+          pnpm install
+          pnpm run build
 
       - name: Determine version
         id: version
@@ -158,6 +158,12 @@ jobs:
           git push -f "https://x-access-token:${{ secrets.FORGEJO_ACTIONS_TOKEN }}@$(echo '${{ github.server_url }}' | sed 's|https://||')/${{ github.repository }}.git" "$BRANCH"
 
           echo "Deployed demo site to branch: $BRANCH"
+
+      - name: Build demo site for GitHub Pages
+        run: |
+          cd site
+          rm -rf dist
+          ASTRO_SITE=https://zachhandley.github.io ASTRO_BASE=/ELID pnpm run build
 
       - name: Push dist to GitHub docs branch
         run: |
