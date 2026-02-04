@@ -1,6 +1,9 @@
 name: Documentation
 
 on:
+  push:
+    tags:
+      - 'docs-v*.*.*'
   workflow_dispatch:
     inputs:
       version:
@@ -155,3 +158,14 @@ jobs:
           git push -f "https://x-access-token:${{ secrets.FORGEJO_ACTIONS_TOKEN }}@$(echo '${{ github.server_url }}' | sed 's|https://||')/${{ github.repository }}.git" "$BRANCH"
 
           echo "Deployed demo site to branch: $BRANCH"
+
+      - name: Push dist to GitHub docs branch
+        run: |
+          cd site/dist
+          git init
+          git checkout --orphan docs
+          git add -A
+          git -c user.name="Zach Handley" -c user.email="zachhandley@gmail.com" \
+            commit -m "Docs site ${GITHUB_REF_NAME:-manual}"
+          git remote add github https://x-access-token:${{ secrets.GH_ACCESS_TOKEN }}@github.com/zachhandley/elid.git
+          git push github docs --force
