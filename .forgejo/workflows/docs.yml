@@ -93,6 +93,13 @@ jobs:
       - name: Build WASM for demo site
         run: pnpm exec wasm-pack build --target web --out-dir site/public/wasm -- --features wasm
 
+      - name: Upload WASM artifact
+        uses: https://github.com/christopherhx/gitea-upload-artifact@v4
+        with:
+          name: site-wasm
+          path: site/public/wasm/
+          retention-days: 1
+
       - name: Build demo site
         run: |
           cd site
@@ -159,12 +166,19 @@ jobs:
 
           echo "Deployed demo site to branch: $BRANCH"
 
+      - name: Download WASM artifact
+        uses: https://github.com/christopherhx/gitea-download-artifact@v4
+        with:
+          name: site-wasm
+          path: site/public/wasm
+
       - name: Build demo site for GitHub Pages
         run: |
           cd site
           rm -rf dist
           ASTRO_SITE=https://zachhandley.github.io ASTRO_BASE=/ELID pnpm run build
           touch dist/.nojekyll
+          cp dist/index.html dist/404.html
 
       - name: Push dist to GitHub docs branch
         run: |
