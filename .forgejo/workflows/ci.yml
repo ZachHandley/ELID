@@ -189,7 +189,7 @@ jobs:
         run: uv pip install dist/elid-*.whl
 
       - name: Run Python tests
-        run: python3 tests/python/test_bindings.py
+        run: uv run python tests/python/test_bindings.py
 
   cache-cleanup:
     name: Cleanup Old Caches
