@@ -94,6 +94,6 @@ jobs:
 
       - name: Report native size
         run: |
-          size=$(stat -c%s target/release/libelid.so)
+          size=$(stat -c%s ${CARGO_TARGET_DIR:-./target}/release/libelid.so)
           size_kb=$((size / 1024))
           echo "Native library size: ${size_kb} KB"
