@@ -67,46 +67,64 @@ const hammingDist = ref<number | null>(null);
 const similarityScore = ref<number | null>(null);
 
 // Seeded random for reproducible vectors
-let seedA = 42;
-let seedB = 137;
+const BASE_DIMS = 2048; // Match ELID's MAX_COMMON_SOURCE_DIMS
+let baseSeed = 42;
+let cachedBaseEmbedding: Float64Array | null = null;
 
 function seededRandom(seed: number): { value: number; nextSeed: number } {
   const newSeed = (seed * 1103515245 + 12345) & 0x7fffffff;
   return { value: newSeed / 0x7fffffff, nextSeed: newSeed };
 }
 
-function generateEmbedding(dims: number, initialSeed: number): Float64Array {
-  const arr = new Float64Array(dims);
-  let currentSeed = initialSeed;
+function generateBaseEmbedding(seed: number): Float64Array {
+  const arr = new Float64Array(BASE_DIMS);
+  let currentSeed = seed;
 
-  for (let i = 0; i < dims; i++) {
+  for (let i = 0; i < BASE_DIMS; i++) {
     const { value, nextSeed } = seededRandom(currentSeed);
     arr[i] = (value - 0.5) * 2;
     currentSeed = nextSeed;
   }
 
-  // Normalize
+  // Normalize to unit length
   let norm = 0;
-  for (let i = 0; i < dims; i++) {
-    norm += arr[i] * arr[i];
-  }
+  for (let i = 0; i < BASE_DIMS; i++) norm += arr[i] * arr[i];
   norm = Math.sqrt(norm);
-  if (norm > 0) {
-    for (let i = 0; i < dims; i++) {
-      arr[i] /= norm;
-    }
-  }
+  for (let i = 0; i < BASE_DIMS; i++) arr[i] /= norm;
 
   return arr;
 }
 
-function encodeVector(vector: VectorInfo, seed: number): void {
+function deriveVector(baseEmbedding: Float64Array, targetDims: number): Float64Array {
+  // Truncate to first targetDims (Matryoshka-style)
+  const truncated = new Float64Array(targetDims);
+  for (let i = 0; i < targetDims; i++) {
+    truncated[i] = baseEmbedding[i];
+  }
+
+  // Renormalize (critical for correct similarity)
+  let norm = 0;
+  for (let i = 0; i < targetDims; i++) norm += truncated[i] * truncated[i];
+  norm = Math.sqrt(norm);
+  if (norm > 0) {
+    for (let i = 0; i < targetDims; i++) truncated[i] /= norm;
+  }
+
+  return truncated;
+}
+
+function encodeVector(vector: VectorInfo): void {
   if (!isReady() || !hasEmbeddings.value) return;
 
-  const embedding = generateEmbedding(vector.dims, seed);
-  vector.embedding = embedding;
+  // Generate base once, derive both vectors from it
+  if (!cachedBaseEmbedding) {
+    cachedBaseEmbedding = generateBaseEmbedding(baseSeed);
+  }
 
-  const elid = encodeElidCrossDimensional(embedding, commonDims.value);
+  const derived = deriveVector(cachedBaseEmbedding, vector.dims);
+  vector.embedding = derived;
+
+  const elid = encodeElidCrossDimensional(derived, commonDims.value);
   vector.elid = elid;
 
   if (elid) {
@@ -147,16 +165,15 @@ function computeComparison(): void {
 }
 
 function regenerateVectors(): void {
-  seedA = Date.now();
-  seedB = seedA + 1000;
-  encodeVector(vectorA.value, seedA);
-  encodeVector(vectorB.value, seedB);
-  computeComparison();
+  baseSeed = Date.now();
+  cachedBaseEmbedding = null; // Clear cache to regenerate
+  updateVectors();
 }
 
 function updateVectors(): void {
-  encodeVector(vectorA.value, seedA);
-  encodeVector(vectorB.value, seedB);
+  cachedBaseEmbedding = null; // Clear when dimensions change
+  encodeVector(vectorA.value);
+  encodeVector(vectorB.value);
   computeComparison();
 }
 
@@ -387,17 +404,18 @@ onMounted(async () => {
         </h4>
         <div class="text-sm text-elid-text-muted space-y-2">
           <p>
-            Different embedding models produce vectors of different sizes (e.g., OpenAI's 1536d vs Cohere's 1024d).
-            Normally, these cannot be compared directly because cosine similarity requires same-length vectors.
+            This demo simulates <strong class="text-elid-text">Matryoshka Representation Learning</strong> -
+            modern embedding models where early dimensions encode the most semantic information.
+            Both vectors are derived from the same 2048-dimensional base by truncation.
           </p>
           <p>
-            ELID's <strong class="text-elid-text">cross-dimensional encoding</strong> solves this by projecting
-            all embeddings to a common dimension space using a deterministic random projection matrix.
-            This preserves relative distances while enabling comparison across any model.
+            ELID's cross-dimensional encoding projects both vectors to a common space
+            using a <strong class="text-elid-text">Johnson-Lindenstrauss random projection</strong>, enabling
+            direct comparison regardless of original dimensions.
           </p>
           <p class="text-elid-accent">
-            Use case: Build a single search index that works with embeddings from multiple providers,
-            or migrate between embedding models without re-indexing.
+            Use case: Compare embeddings from OpenAI (1536d) and Cohere (1024d) in the same index,
+            or reduce dimensions for storage while preserving searchability.
           </p>
         </div>
       </div>

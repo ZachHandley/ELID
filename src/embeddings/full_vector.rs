@@ -53,14 +53,15 @@ pub const FULL_VECTOR_HEADER_SIZE: usize = 12;
 
 /// Derive a seed for the random projection matrix
 ///
-/// Creates a unique 32-byte seed for ChaCha20Rng based on the base seed
-/// and dimension indices.
+/// Creates a unique 32-byte seed for ChaCha20Rng based on the base seed,
+/// dimension indices, and row index.
 #[inline]
-fn derive_projection_seed(base_seed: u64, from_dim: u16, to_dim: u16) -> [u8; 32] {
-    let mut input = [0u8; 12];
+fn derive_projection_seed(base_seed: u64, from_dim: u16, to_dim: u16, row_idx: u16) -> [u8; 32] {
+    let mut input = [0u8; 14];
     input[0..8].copy_from_slice(&base_seed.to_le_bytes());
     input[8..10].copy_from_slice(&from_dim.to_le_bytes());
     input[10..12].copy_from_slice(&to_dim.to_le_bytes());
+    input[12..14].copy_from_slice(&row_idx.to_le_bytes());
 
     let hash = blake3::hash(&input);
     *hash.as_bytes()
@@ -72,7 +73,7 @@ fn derive_projection_seed(base_seed: u64, from_dim: u16, to_dim: u16) -> [u8; 32
 /// row of the projection matrix. Values are scaled by 1/sqrt(to_dims) to
 /// preserve expected norms.
 fn generate_projection_row(base_seed: u64, from_dims: u16, to_dims: u16, row_idx: u16) -> Vec<f32> {
-    let seed = derive_projection_seed(base_seed, from_dims, row_idx);
+    let seed = derive_projection_seed(base_seed, from_dims, to_dims, row_idx);
     let mut rng = ChaCha20Rng::from_seed(seed);
 
     // Scale factor for norm preservation (Johnson-Lindenstrauss)
