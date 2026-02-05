@@ -10,9 +10,12 @@ use pyo3::prelude::*;
 
 // Conditional imports for embeddings feature
 #[cfg(feature = "embeddings")]
-use crate::embeddings::{self, Profile as EmbedProfile};
+use crate::embeddings::{
+    self, DimensionMode as EmbedDimensionMode, Profile as EmbedProfile,
+    VectorPrecision as EmbedVectorPrecision,
+};
 #[cfg(feature = "embeddings")]
-use numpy::PyReadonlyArray1;
+use numpy::{PyArray1, PyReadonlyArray1};
 #[cfg(feature = "embeddings")]
 use pyo3::types::PyBytes;
 
@@ -176,7 +179,11 @@ fn best_match(a: &str, b: &str) -> f64 {
 ///     >>> result
 ///     {'index': 0, 'score': 0.907}
 #[pyfunction]
-fn find_best_match(query: &str, candidates: Vec<String>, py: Python<'_>) -> PyResult<Py<pyo3::PyAny>> {
+fn find_best_match(
+    query: &str,
+    candidates: Vec<String>,
+    py: Python<'_>,
+) -> PyResult<Py<pyo3::PyAny>> {
     let candidate_refs: Vec<&str> = candidates.iter().map(|s| s.as_str()).collect();
     let (idx, score) = crate::find_best_match(query, &candidate_refs);
 
@@ -541,6 +548,373 @@ fn elid_hamming_distance(elid1: &str, elid2: &str) -> PyResult<u32> {
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
 }
 
+// ============================================================================
+// FullVector Encoding Types and Functions (feature-gated)
+// ============================================================================
+
+/// Precision options for full vector encoding.
+///
+/// Controls how many bits are used to represent each dimension value.
+/// Higher precision means more accurate reconstruction but larger output.
+///
+/// Variants:
+///     Full32: Full 32-bit float (lossless, 4 bytes per dimension)
+///     Half16: 16-bit half-precision float (2 bytes per dimension)
+///     Quant8: 8-bit quantized (1 byte per dimension, ~1% error)
+///
+/// Example:
+///     >>> import elid
+///     >>> prec = elid.VectorPrecision.Full32  # Lossless
+///     >>> prec = elid.VectorPrecision.Half16  # Good balance
+///     >>> prec = elid.VectorPrecision.Quant8  # Smallest
+#[cfg(feature = "embeddings")]
+#[pyclass]
+#[derive(Clone, Copy, Debug)]
+pub enum VectorPrecision {
+    /// Full 32-bit float (lossless)
+    Full32,
+    /// 16-bit half-precision float
+    Half16,
+    /// 8-bit quantized (~1% error)
+    Quant8,
+}
+
+#[cfg(feature = "embeddings")]
+impl From<VectorPrecision> for EmbedVectorPrecision {
+    fn from(p: VectorPrecision) -> Self {
+        match p {
+            VectorPrecision::Full32 => EmbedVectorPrecision::Full32,
+            VectorPrecision::Half16 => EmbedVectorPrecision::Half16,
+            VectorPrecision::Quant8 => EmbedVectorPrecision::Quant8,
+        }
+    }
+}
+
+/// Dimension handling mode for full vector encoding.
+///
+/// Controls whether to preserve original dimensions, reduce them,
+/// or project to a common space for cross-dimensional comparison.
+///
+/// Variants:
+///     Preserve: Keep all original dimensions (no projection)
+///     Reduce: Reduce dimensions using random projection
+///     Common: Project to common space for cross-dimensional comparison
+///
+/// Example:
+///     >>> import elid
+///     >>> mode = elid.DimensionMode.Preserve  # Keep all dims
+///     >>> mode = elid.DimensionMode.Reduce    # Reduce for smaller output
+///     >>> mode = elid.DimensionMode.Common    # Cross-dimensional comparison
+#[cfg(feature = "embeddings")]
+#[pyclass]
+#[derive(Clone, Copy, Debug)]
+pub enum DimensionMode {
+    /// Preserve all original dimensions
+    Preserve,
+    /// Reduce dimensions using random projection
+    Reduce,
+    /// Project to common space for cross-dimensional comparison
+    Common,
+}
+
+/// Encode an embedding using lossless full vector encoding.
+///
+/// Preserves the exact embedding values (32-bit float precision) and all dimensions.
+/// This produces the largest output but allows exact reconstruction.
+///
+/// Args:
+///     embedding (numpy.ndarray): Input vector (f32, 64-2048 dimensions)
+///
+/// Returns:
+///     str: Encoded ELID string that can be decoded back to the original embedding
+///
+/// Raises:
+///     ValueError: If embedding dimensions are invalid or values contain NaN/Inf
+///
+/// Example:
+///     >>> import elid
+///     >>> import numpy as np
+///     >>> embedding = np.random.randn(768).astype(np.float32)
+///     >>> elid_str = elid.encode_lossless(embedding)
+///     >>> recovered = elid.decode_to_embedding(elid_str)
+///     >>> np.allclose(embedding, recovered)  # True
+#[cfg(feature = "embeddings")]
+#[pyfunction]
+fn encode_lossless(embedding: PyReadonlyArray1<f32>) -> PyResult<String> {
+    let slice = embedding.as_slice()?;
+    let profile = EmbedProfile::lossless();
+
+    embeddings::encode(slice, &profile)
+        .map(|elid| elid.to_string())
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+}
+
+/// Encode an embedding with percentage-based compression.
+///
+/// The retention percentage (0.0-1.0) controls how much information is preserved:
+/// - 1.0 = lossless (Full32 precision, all dimensions)
+/// - 0.5 = half precision and/or half dimensions
+/// - 0.25 = quarter precision and/or quarter dimensions
+///
+/// The algorithm optimizes for dimension reduction first (which preserves
+/// more geometric relationships) before reducing precision.
+///
+/// Args:
+///     embedding (numpy.ndarray): Input vector (f32, 64-2048 dimensions)
+///     retention_pct (float): Information retention percentage (0.0-1.0)
+///
+/// Returns:
+///     str: Encoded ELID string
+///
+/// Raises:
+///     ValueError: If embedding dimensions are invalid or values contain NaN/Inf
+///
+/// Example:
+///     >>> import elid
+///     >>> import numpy as np
+///     >>> embedding = np.random.randn(768).astype(np.float32)
+///     >>> elid_50 = elid.encode_compressed(embedding, 0.5)   # 50% retention
+///     >>> elid_25 = elid.encode_compressed(embedding, 0.25)  # 25% retention
+///     >>> len(elid_25) < len(elid_50)  # True (smaller output)
+#[cfg(feature = "embeddings")]
+#[pyfunction]
+fn encode_compressed(embedding: PyReadonlyArray1<f32>, retention_pct: f32) -> PyResult<String> {
+    let slice = embedding.as_slice()?;
+    let original_dims = slice.len() as u16;
+    let profile = EmbedProfile::compressed(retention_pct, original_dims);
+
+    embeddings::encode(slice, &profile)
+        .map(|elid| elid.to_string())
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+}
+
+/// Encode an embedding with a maximum output string length constraint.
+///
+/// Calculates the optimal precision and dimension settings to fit within
+/// the specified character limit while maximizing fidelity.
+///
+/// Args:
+///     embedding (numpy.ndarray): Input vector (f32, 64-2048 dimensions)
+///     max_chars (int): Maximum output string length in characters
+///
+/// Returns:
+///     str: Encoded ELID string guaranteed to be <= max_chars in length
+///
+/// Raises:
+///     ValueError: If embedding dimensions are invalid or values contain NaN/Inf
+///
+/// Example:
+///     >>> import elid
+///     >>> import numpy as np
+///     >>> embedding = np.random.randn(768).astype(np.float32)
+///     >>> elid_str = elid.encode_max_length(embedding, 100)
+///     >>> len(elid_str) <= 100  # True
+#[cfg(feature = "embeddings")]
+#[pyfunction]
+fn encode_max_length(embedding: PyReadonlyArray1<f32>, max_chars: usize) -> PyResult<String> {
+    let slice = embedding.as_slice()?;
+    let original_dims = slice.len() as u16;
+    let profile = EmbedProfile::max_length(max_chars, original_dims);
+
+    embeddings::encode(slice, &profile)
+        .map(|elid| elid.to_string())
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+}
+
+/// Decode an ELID string back to an embedding vector.
+///
+/// Only works for ELIDs encoded with a FullVector profile (lossless,
+/// compressed, or max_length). Returns None for non-reversible profiles
+/// like Mini128, Morton, or Hilbert.
+///
+/// Args:
+///     elid_str (str): A valid ELID string (base32hex encoded)
+///
+/// Returns:
+///     Optional[numpy.ndarray]: Decoded embedding as f32 array, or None if not reversible
+///
+/// Note:
+///     If dimension reduction was used during encoding, the decoded embedding
+///     will be in the reduced dimension space, not the original.
+///
+/// Example:
+///     >>> import elid
+///     >>> import numpy as np
+///     >>> embedding = np.random.randn(768).astype(np.float32)
+///     >>> elid_str = elid.encode_lossless(embedding)
+///     >>> recovered = elid.decode_to_embedding(elid_str)
+///     >>> recovered is not None  # True
+///     >>> np.allclose(embedding, recovered)  # True
+#[cfg(feature = "embeddings")]
+#[pyfunction]
+fn decode_to_embedding<'py>(py: Python<'py>, elid_str: &str) -> PyResult<Option<Bound<'py, PyArray1<f32>>>> {
+    let elid = embeddings::types::Elid::from_string(elid_str.to_string())
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+
+    // Check if reversible first
+    if !embeddings::is_reversible(&elid) {
+        return Ok(None);
+    }
+
+    // Decode to embedding
+    let (values, _metadata) = embeddings::decode_to_embedding(&elid)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+
+    // Convert to numpy array
+    let array = PyArray1::from_vec(py, values);
+    Ok(Some(array))
+}
+
+/// Check if an ELID can be decoded back to an embedding.
+///
+/// Returns True if the ELID was encoded with a FullVector profile
+/// (lossless, compressed, or max_length), False otherwise.
+///
+/// Args:
+///     elid_str (str): A valid ELID string (base32hex encoded)
+///
+/// Returns:
+///     bool: True if decode_to_embedding will return an embedding
+///
+/// Raises:
+///     ValueError: If the ELID string is invalid
+///
+/// Example:
+///     >>> import elid
+///     >>> import numpy as np
+///     >>> embedding = np.random.randn(768).astype(np.float32)
+///     >>>
+///     >>> # Mini128 is NOT reversible
+///     >>> mini_elid = elid.encode(embedding, elid.Profile.Mini128)
+///     >>> elid.is_reversible(mini_elid)  # False
+///     >>>
+///     >>> # Lossless IS reversible
+///     >>> lossless_elid = elid.encode_lossless(embedding)
+///     >>> elid.is_reversible(lossless_elid)  # True
+#[cfg(feature = "embeddings")]
+#[pyfunction]
+fn is_reversible(elid_str: &str) -> PyResult<bool> {
+    let elid = embeddings::types::Elid::from_string(elid_str.to_string())
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+
+    Ok(embeddings::is_reversible(&elid))
+}
+
+/// Encode an embedding for cross-dimensional comparison.
+///
+/// Projects the embedding to a common dimension space, allowing comparison
+/// between embeddings of different original dimensions (e.g., 256d vs 768d).
+///
+/// Args:
+///     embedding (numpy.ndarray): Input vector (f32, 64-2048 dimensions)
+///     common_dims (int): Target dimension space (all vectors projected here)
+///
+/// Returns:
+///     str: Encoded ELID string
+///
+/// Raises:
+///     ValueError: If embedding dimensions are invalid or values contain NaN/Inf
+///
+/// Example:
+///     >>> import elid
+///     >>> import numpy as np
+///     >>> # Different sized embeddings from different models
+///     >>> emb_256 = np.random.randn(256).astype(np.float32)
+///     >>> emb_768 = np.random.randn(768).astype(np.float32)
+///     >>>
+///     >>> # Project both to 128-dim common space
+///     >>> elid1 = elid.encode_cross_dimensional(emb_256, 128)
+///     >>> elid2 = elid.encode_cross_dimensional(emb_768, 128)
+///     >>>
+///     >>> # Now they can be compared directly
+///     >>> dec1 = elid.decode_to_embedding(elid1)
+///     >>> dec2 = elid.decode_to_embedding(elid2)
+///     >>> dec1.shape == dec2.shape  # True (both 128,)
+#[cfg(feature = "embeddings")]
+#[pyfunction]
+fn encode_cross_dimensional(embedding: PyReadonlyArray1<f32>, common_dims: u16) -> PyResult<String> {
+    let slice = embedding.as_slice()?;
+    let profile = EmbedProfile::cross_dimensional(common_dims);
+
+    embeddings::encode(slice, &profile)
+        .map(|elid| elid.to_string())
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+}
+
+/// Get metadata about a FullVector ELID.
+///
+/// Returns a dictionary containing information about how the ELID was encoded,
+/// including original dimensions, precision, and dimension mode.
+///
+/// Args:
+///     elid_str (str): A valid ELID string (base32hex encoded)
+///
+/// Returns:
+///     Optional[dict]: Metadata dictionary with the following keys, or None if not FullVector:
+///         - original_dims (int): Original embedding dimension count
+///         - encoded_dims (int): Number of dimensions in encoded representation
+///         - is_lossless (bool): Whether exact reconstruction is possible
+///         - has_dimension_reduction (bool): Whether dimensions were reduced
+///         - precision (str): "Full32", "Half16", "Quant8", or "Bits"
+///         - precision_bits (int, optional): Bit count if precision is "Bits"
+///         - dimension_mode (str): "Preserve", "Reduce", or "Common"
+///
+/// Raises:
+///     ValueError: If the ELID string is invalid
+///
+/// Example:
+///     >>> import elid
+///     >>> import numpy as np
+///     >>> embedding = np.random.randn(768).astype(np.float32)
+///     >>> elid_str = elid.encode_compressed(embedding, 0.5)
+///     >>> meta = elid.get_metadata(elid_str)
+///     >>> print(meta['original_dims'])  # 768
+///     >>> print(meta['is_lossless'])    # False
+#[cfg(feature = "embeddings")]
+#[pyfunction]
+fn get_metadata(elid_str: &str, py: Python<'_>) -> PyResult<Option<Py<pyo3::PyAny>>> {
+    let elid = embeddings::types::Elid::from_string(elid_str.to_string())
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+
+    // Check if reversible (FullVector)
+    if !embeddings::is_reversible(&elid) {
+        return Ok(None);
+    }
+
+    // Decode to get metadata
+    let (_values, metadata) = embeddings::decode_to_embedding(&elid)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+
+    // Build result dict
+    let dict = pyo3::types::PyDict::new(py);
+    dict.set_item("original_dims", metadata.original_dims)?;
+    dict.set_item("encoded_dims", metadata.encoded_dims)?;
+    dict.set_item("is_lossless", metadata.is_lossless())?;
+    dict.set_item("has_dimension_reduction", metadata.has_dimension_reduction())?;
+
+    // Precision as string
+    let precision_str = match metadata.precision {
+        EmbedVectorPrecision::Full32 => "Full32",
+        EmbedVectorPrecision::Half16 => "Half16",
+        EmbedVectorPrecision::Quant8 => "Quant8",
+        EmbedVectorPrecision::Bits { bits } => {
+            dict.set_item("precision_bits", bits)?;
+            "Bits"
+        }
+    };
+    dict.set_item("precision", precision_str)?;
+
+    // Dimension mode as string
+    let mode_str = match metadata.dimension_mode {
+        EmbedDimensionMode::Preserve => "Preserve",
+        EmbedDimensionMode::Reduce { .. } => "Reduce",
+        EmbedDimensionMode::Common { .. } => "Common",
+    };
+    dict.set_item("dimension_mode", mode_str)?;
+
+    Ok(Some(dict.unbind().into()))
+}
+
 /// ELID - Efficient Levenshtein and String Similarity Library
 ///
 /// A fast library for computing various string similarity metrics.
@@ -566,10 +940,24 @@ fn elid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Embedding functions (feature-gated)
     #[cfg(feature = "embeddings")]
     {
+        // Basic embedding functions
         m.add_function(wrap_pyfunction!(encode_embedding, m)?)?;
         m.add_function(wrap_pyfunction!(decode_elid, m)?)?;
         m.add_function(wrap_pyfunction!(elid_hamming_distance, m)?)?;
         m.add_class::<Profile>()?;
+
+        // FullVector encoding functions
+        m.add_function(wrap_pyfunction!(encode_lossless, m)?)?;
+        m.add_function(wrap_pyfunction!(encode_compressed, m)?)?;
+        m.add_function(wrap_pyfunction!(encode_max_length, m)?)?;
+        m.add_function(wrap_pyfunction!(decode_to_embedding, m)?)?;
+        m.add_function(wrap_pyfunction!(is_reversible, m)?)?;
+        m.add_function(wrap_pyfunction!(encode_cross_dimensional, m)?)?;
+        m.add_function(wrap_pyfunction!(get_metadata, m)?)?;
+
+        // FullVector types
+        m.add_class::<VectorPrecision>()?;
+        m.add_class::<DimensionMode>()?;
     }
 
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

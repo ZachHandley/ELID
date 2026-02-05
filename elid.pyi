@@ -1,12 +1,31 @@
 """Type stubs for the ELID string similarity library."""
 
-from typing import Optional
+from typing import Optional, TypedDict
 from enum import Enum
 
 import numpy as np
 import numpy.typing as npt
 
 __version__: str
+
+
+class ElidMetadata(TypedDict, total=False):
+    """Metadata about a FullVector ELID encoding."""
+
+    original_dims: int
+    """Original embedding dimension count"""
+    encoded_dims: int
+    """Number of dimensions in encoded representation"""
+    is_lossless: bool
+    """Whether exact reconstruction is possible"""
+    has_dimension_reduction: bool
+    """Whether dimensions were reduced"""
+    precision: str
+    """Precision type: 'Full32', 'Half16', 'Quant8', or 'Bits'"""
+    precision_bits: int
+    """Bit count if precision is 'Bits' (optional)"""
+    dimension_mode: str
+    """Dimension mode: 'Preserve', 'Reduce', or 'Common'"""
 
 class SimilarityOpts:
     """Options for configuring string similarity algorithms.
@@ -310,5 +329,270 @@ def elid_hamming_distance(elid1: str, elid2: str) -> int:
         >>> elid1 = elid.encode(emb1, elid.Profile.Mini128)
         >>> elid2 = elid.encode(emb2, elid.Profile.Mini128)
         >>> distance = elid.elid_hamming_distance(elid1, elid2)
+    """
+    ...
+
+
+# ============================================================================
+# FullVector encoding types and functions
+# ============================================================================
+
+
+class VectorPrecision(Enum):
+    """Precision options for full vector encoding.
+
+    Controls how many bits are used to represent each dimension value.
+    Higher precision means more accurate reconstruction but larger output.
+
+    Variants:
+        Full32: Full 32-bit float (lossless, 4 bytes per dimension)
+        Half16: 16-bit half-precision float (2 bytes per dimension)
+        Quant8: 8-bit quantized (1 byte per dimension, ~1% error)
+    """
+
+    Full32 = ...
+    """Full 32-bit float (lossless)"""
+    Half16 = ...
+    """16-bit half-precision float"""
+    Quant8 = ...
+    """8-bit quantized (~1% error)"""
+
+
+class DimensionMode(Enum):
+    """Dimension handling mode for full vector encoding.
+
+    Controls whether to preserve original dimensions, reduce them,
+    or project to a common space for cross-dimensional comparison.
+
+    Variants:
+        Preserve: Keep all original dimensions (no projection)
+        Reduce: Reduce dimensions using random projection
+        Common: Project to common space for cross-dimensional comparison
+    """
+
+    Preserve = ...
+    """Preserve all original dimensions"""
+    Reduce = ...
+    """Reduce dimensions using random projection"""
+    Common = ...
+    """Project to common space for cross-dimensional comparison"""
+
+
+def encode_lossless(embedding: npt.NDArray[np.float32]) -> str:
+    """Encode an embedding using lossless full vector encoding.
+
+    Preserves the exact embedding values (32-bit float precision) and all dimensions.
+    This produces the largest output but allows exact reconstruction.
+
+    Args:
+        embedding: Input vector (f32, 64-2048 dimensions)
+
+    Returns:
+        Encoded ELID string that can be decoded back to the original embedding
+
+    Raises:
+        ValueError: If embedding dimensions are invalid or values contain NaN/Inf
+
+    Example:
+        >>> import elid
+        >>> import numpy as np
+        >>> embedding = np.random.randn(768).astype(np.float32)
+        >>> elid_str = elid.encode_lossless(embedding)
+        >>> recovered = elid.decode_to_embedding(elid_str)
+        >>> np.allclose(embedding, recovered)  # True
+    """
+    ...
+
+
+def encode_compressed(
+    embedding: npt.NDArray[np.float32], retention_pct: float
+) -> str:
+    """Encode an embedding with percentage-based compression.
+
+    The retention percentage (0.0-1.0) controls how much information is preserved:
+    - 1.0 = lossless (Full32 precision, all dimensions)
+    - 0.5 = half precision and/or half dimensions
+    - 0.25 = quarter precision and/or quarter dimensions
+
+    The algorithm optimizes for dimension reduction first (which preserves
+    more geometric relationships) before reducing precision.
+
+    Args:
+        embedding: Input vector (f32, 64-2048 dimensions)
+        retention_pct: Information retention percentage (0.0-1.0)
+
+    Returns:
+        Encoded ELID string
+
+    Raises:
+        ValueError: If embedding dimensions are invalid or values contain NaN/Inf
+
+    Example:
+        >>> import elid
+        >>> import numpy as np
+        >>> embedding = np.random.randn(768).astype(np.float32)
+        >>> elid_50 = elid.encode_compressed(embedding, 0.5)   # 50% retention
+        >>> elid_25 = elid.encode_compressed(embedding, 0.25)  # 25% retention
+        >>> len(elid_25) < len(elid_50)  # True (smaller output)
+    """
+    ...
+
+
+def encode_max_length(
+    embedding: npt.NDArray[np.float32], max_chars: int
+) -> str:
+    """Encode an embedding with a maximum output string length constraint.
+
+    Calculates the optimal precision and dimension settings to fit within
+    the specified character limit while maximizing fidelity.
+
+    Args:
+        embedding: Input vector (f32, 64-2048 dimensions)
+        max_chars: Maximum output string length in characters
+
+    Returns:
+        Encoded ELID string guaranteed to be <= max_chars in length
+
+    Raises:
+        ValueError: If embedding dimensions are invalid or values contain NaN/Inf
+
+    Example:
+        >>> import elid
+        >>> import numpy as np
+        >>> embedding = np.random.randn(768).astype(np.float32)
+        >>> elid_str = elid.encode_max_length(embedding, 100)
+        >>> len(elid_str) <= 100  # True
+    """
+    ...
+
+
+def decode_to_embedding(elid_str: str) -> Optional[npt.NDArray[np.float32]]:
+    """Decode an ELID string back to an embedding vector.
+
+    Only works for ELIDs encoded with a FullVector profile (lossless,
+    compressed, or max_length). Returns None for non-reversible profiles
+    like Mini128, Morton, or Hilbert.
+
+    Args:
+        elid_str: A valid ELID string (base32hex encoded)
+
+    Returns:
+        Decoded embedding as f32 array, or None if not reversible
+
+    Note:
+        If dimension reduction was used during encoding, the decoded embedding
+        will be in the reduced dimension space, not the original.
+
+    Example:
+        >>> import elid
+        >>> import numpy as np
+        >>> embedding = np.random.randn(768).astype(np.float32)
+        >>> elid_str = elid.encode_lossless(embedding)
+        >>> recovered = elid.decode_to_embedding(elid_str)
+        >>> recovered is not None  # True
+        >>> np.allclose(embedding, recovered)  # True
+    """
+    ...
+
+
+def is_reversible(elid_str: str) -> bool:
+    """Check if an ELID can be decoded back to an embedding.
+
+    Returns True if the ELID was encoded with a FullVector profile
+    (lossless, compressed, or max_length), False otherwise.
+
+    Args:
+        elid_str: A valid ELID string (base32hex encoded)
+
+    Returns:
+        True if decode_to_embedding will return an embedding
+
+    Raises:
+        ValueError: If the ELID string is invalid
+
+    Example:
+        >>> import elid
+        >>> import numpy as np
+        >>> embedding = np.random.randn(768).astype(np.float32)
+        >>>
+        >>> # Mini128 is NOT reversible
+        >>> mini_elid = elid.encode(embedding, elid.Profile.Mini128)
+        >>> elid.is_reversible(mini_elid)  # False
+        >>>
+        >>> # Lossless IS reversible
+        >>> lossless_elid = elid.encode_lossless(embedding)
+        >>> elid.is_reversible(lossless_elid)  # True
+    """
+    ...
+
+
+def encode_cross_dimensional(
+    embedding: npt.NDArray[np.float32], common_dims: int
+) -> str:
+    """Encode an embedding for cross-dimensional comparison.
+
+    Projects the embedding to a common dimension space, allowing comparison
+    between embeddings of different original dimensions (e.g., 256d vs 768d).
+
+    Args:
+        embedding: Input vector (f32, 64-2048 dimensions)
+        common_dims: Target dimension space (all vectors projected here)
+
+    Returns:
+        Encoded ELID string
+
+    Raises:
+        ValueError: If embedding dimensions are invalid or values contain NaN/Inf
+
+    Example:
+        >>> import elid
+        >>> import numpy as np
+        >>> # Different sized embeddings from different models
+        >>> emb_256 = np.random.randn(256).astype(np.float32)
+        >>> emb_768 = np.random.randn(768).astype(np.float32)
+        >>>
+        >>> # Project both to 128-dim common space
+        >>> elid1 = elid.encode_cross_dimensional(emb_256, 128)
+        >>> elid2 = elid.encode_cross_dimensional(emb_768, 128)
+        >>>
+        >>> # Now they can be compared directly
+        >>> dec1 = elid.decode_to_embedding(elid1)
+        >>> dec2 = elid.decode_to_embedding(elid2)
+        >>> dec1.shape == dec2.shape  # True (both 128,)
+    """
+    ...
+
+
+def get_metadata(elid_str: str) -> Optional[ElidMetadata]:
+    """Get metadata about a FullVector ELID.
+
+    Returns a dictionary containing information about how the ELID was encoded,
+    including original dimensions, precision, and dimension mode.
+
+    Args:
+        elid_str: A valid ELID string (base32hex encoded)
+
+    Returns:
+        Metadata dictionary, or None if not a FullVector ELID.
+        The dictionary contains:
+        - original_dims (int): Original embedding dimension count
+        - encoded_dims (int): Number of dimensions in encoded representation
+        - is_lossless (bool): Whether exact reconstruction is possible
+        - has_dimension_reduction (bool): Whether dimensions were reduced
+        - precision (str): "Full32", "Half16", "Quant8", or "Bits"
+        - precision_bits (int, optional): Bit count if precision is "Bits"
+        - dimension_mode (str): "Preserve", "Reduce", or "Common"
+
+    Raises:
+        ValueError: If the ELID string is invalid
+
+    Example:
+        >>> import elid
+        >>> import numpy as np
+        >>> embedding = np.random.randn(768).astype(np.float32)
+        >>> elid_str = elid.encode_compressed(embedding, 0.5)
+        >>> meta = elid.get_metadata(elid_str)
+        >>> print(meta['original_dims'])  # 768
+        >>> print(meta['is_lossless'])    # False
     """
     ...

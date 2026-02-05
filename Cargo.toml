@@ -15,18 +15,21 @@ path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = ["strings"]
-strings = []                  # Zero-dependency string similarity (current behavior)
-embeddings = [                # Vector encoding
+default = ["strings", "embeddings"]
+strings = []                  # Zero-dependency string similarity
+embeddings = [                # Vector encoding (now included by default)
   "dep:rand", "dep:rand_chacha", "dep:rand_distr",
   "dep:blake3", "dep:data-encoding", "dep:once_cell",
-  "dep:thiserror", "dep:serde"
+  "dep:thiserror", "dep:serde", "dep:half"
 ]
-wasm = ["strings", "dep:wasm-bindgen", "dep:js-sys", "dep:serde", "dep:serde-wasm-bindgen", "dep:serde_json"]
-wasm-embeddings = ["wasm", "embeddings", "dep:getrandom"]
-python = ["strings", "dep:pyo3"]
-python-embeddings = ["python", "embeddings", "dep:numpy", "dep:rayon"]
-ffi = ["strings"]
+wasm = ["strings", "embeddings", "dep:wasm-bindgen", "dep:js-sys", "dep:serde", "dep:serde-wasm-bindgen", "dep:serde_json", "dep:getrandom"]
+python = ["strings", "embeddings", "dep:pyo3", "dep:numpy", "dep:rayon"]
+ffi = ["strings", "embeddings"]
+# Minimal builds without embeddings (smaller binary, zero deps for strings)
+strings-only = ["strings"]
+wasm-strings-only = ["strings", "dep:wasm-bindgen", "dep:js-sys", "dep:serde", "dep:serde-wasm-bindgen", "dep:serde_json"]
+python-strings-only = ["strings", "dep:pyo3"]
+ffi-strings-only = ["strings"]
 
 [dependencies]
 # No external dependencies for core algorithms - pure Rust implementation
@@ -42,6 +45,7 @@ blake3 = { version = "1.5", optional = true }
 data-encoding = { version = "2.5", optional = true }
 once_cell = { version = "1.19", optional = true }
 thiserror = { version = "1.0", optional = true }
+half = { version = "2.4", optional = true }
 rayon = { version = "1.8", optional = true }
 getrandom = { version = "0.2", features = ["js"], optional = true }
 numpy = { version = "0.27", optional = true }

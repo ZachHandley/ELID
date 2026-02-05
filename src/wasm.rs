@@ -3,12 +3,12 @@
 //! This module provides JavaScript-friendly bindings for all ELID functions.
 //! These bindings work in browsers, Node.js, Deno, and Bun.
 
-use js_sys::{Object, Reflect};
+use js_sys::{Float64Array, Object, Reflect};
 use wasm_bindgen::prelude::*;
 
 // Conditional imports for embeddings feature
 #[cfg(feature = "embeddings")]
-use crate::embeddings::{self, Profile};
+use crate::embeddings::{self, DimensionMode, Profile, VectorPrecision};
 
 /// Compute the Levenshtein distance between two strings.
 ///
@@ -531,6 +531,430 @@ pub fn elid_hamming_distance_wasm(elid1: String, elid2: String) -> Result<u32, J
 
     // Compute Hamming distance
     embeddings::hamming_distance(&elid_a, &elid_b).map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+// ============================================================================
+// FullVector Encoding Functions (feature-gated)
+// ============================================================================
+
+/// Precision options for full vector encoding.
+///
+/// Controls how many bits are used to represent each dimension value.
+/// Higher precision means more accurate reconstruction but larger output.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { ElidVectorPrecision, encodeElidWithPrecision } from 'elid';
+///
+/// const embedding = new Float64Array(768).fill(0.1);
+/// // Full32 = lossless, Half16 = smaller with minimal error
+/// ```
+#[cfg(feature = "embeddings")]
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug)]
+pub enum ElidVectorPrecision {
+    /// Full 32-bit float (lossless, 4 bytes per dimension)
+    Full32 = 0,
+    /// 16-bit half-precision float (2 bytes per dimension)
+    Half16 = 1,
+    /// 8-bit quantized (1 byte per dimension, ~1% error)
+    Quant8 = 2,
+}
+
+#[cfg(feature = "embeddings")]
+impl From<ElidVectorPrecision> for VectorPrecision {
+    fn from(p: ElidVectorPrecision) -> Self {
+        match p {
+            ElidVectorPrecision::Full32 => VectorPrecision::Full32,
+            ElidVectorPrecision::Half16 => VectorPrecision::Half16,
+            ElidVectorPrecision::Quant8 => VectorPrecision::Quant8,
+        }
+    }
+}
+
+/// Dimension handling mode for full vector encoding.
+///
+/// Controls whether to preserve original dimensions, reduce them,
+/// or project to a common space for cross-dimensional comparison.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { ElidDimensionMode, encodeElidFullVector } from 'elid';
+///
+/// // Preserve all dimensions
+/// // Reduce to fewer dimensions for smaller output
+/// // Common space for comparing different-sized embeddings
+/// ```
+#[cfg(feature = "embeddings")]
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug)]
+pub enum ElidDimensionMode {
+    /// Preserve all original dimensions (no projection)
+    Preserve = 0,
+    /// Reduce dimensions using random projection
+    Reduce = 1,
+    /// Project to common space for cross-dimensional comparison
+    Common = 2,
+}
+
+/// Encode an embedding using lossless full vector encoding.
+///
+/// Preserves the exact embedding values (32-bit float precision) and all dimensions.
+/// This produces the largest output but allows exact reconstruction.
+///
+/// # Parameters
+///
+/// - `embedding`: Float64 array of embedding values (64-2048 dimensions)
+///
+/// # Returns
+///
+/// A base32hex-encoded ELID string that can be decoded back to the original embedding.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { encodeElidLossless, decodeElidToEmbedding } from 'elid';
+///
+/// const embedding = new Float64Array(768).fill(0.1);
+/// const elid = encodeElidLossless(embedding);
+///
+/// // Later, recover the exact embedding
+/// const recovered = decodeElidToEmbedding(elid);
+/// // recovered is identical to embedding
+/// ```
+#[cfg(feature = "embeddings")]
+#[wasm_bindgen(js_name = encodeElidLossless)]
+pub fn encode_elid_lossless(embedding: &[f64]) -> Result<String, JsValue> {
+    let embedding_f32: Vec<f32> = embedding.iter().map(|&x| x as f32).collect();
+    let profile = Profile::lossless();
+
+    embeddings::encode(&embedding_f32, &profile)
+        .map(|elid| elid.to_string())
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Encode an embedding with percentage-based compression.
+///
+/// The retention percentage (0.0-1.0) controls how much information is preserved:
+/// - 1.0 = lossless (Full32 precision, all dimensions)
+/// - 0.5 = half precision and/or half dimensions
+/// - 0.25 = quarter precision and/or quarter dimensions
+///
+/// The algorithm optimizes for dimension reduction first (which preserves
+/// more geometric relationships) before reducing precision.
+///
+/// # Parameters
+///
+/// - `embedding`: Float64 array of embedding values (64-2048 dimensions)
+/// - `retention_pct`: Information retention percentage (0.0-1.0)
+///
+/// # Returns
+///
+/// A base32hex-encoded ELID string.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { encodeElidCompressed } from 'elid';
+///
+/// const embedding = new Float64Array(768).fill(0.1);
+///
+/// // 50% retention - good balance of size and fidelity
+/// const elid = encodeElidCompressed(embedding, 0.5);
+///
+/// // 25% retention - smaller but less accurate
+/// const smallElid = encodeElidCompressed(embedding, 0.25);
+/// ```
+#[cfg(feature = "embeddings")]
+#[wasm_bindgen(js_name = encodeElidCompressed)]
+pub fn encode_elid_compressed(embedding: &[f64], retention_pct: f64) -> Result<String, JsValue> {
+    let embedding_f32: Vec<f32> = embedding.iter().map(|&x| x as f32).collect();
+    let original_dims = embedding_f32.len() as u16;
+    let profile = Profile::compressed(retention_pct as f32, original_dims);
+
+    embeddings::encode(&embedding_f32, &profile)
+        .map(|elid| elid.to_string())
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Encode an embedding with a maximum output string length constraint.
+///
+/// Calculates the optimal precision and dimension settings to fit within
+/// the specified character limit while maximizing fidelity.
+///
+/// # Parameters
+///
+/// - `embedding`: Float64 array of embedding values (64-2048 dimensions)
+/// - `max_chars`: Maximum output string length in characters
+///
+/// # Returns
+///
+/// A base32hex-encoded ELID string guaranteed to be <= max_chars in length.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { encodeElidMaxLength } from 'elid';
+///
+/// const embedding = new Float64Array(768).fill(0.1);
+///
+/// // Fit in 100 characters (e.g., for database column constraints)
+/// const elid = encodeElidMaxLength(embedding, 100);
+/// console.log(elid.length <= 100); // true
+///
+/// // Fit in 50 characters (more compression)
+/// const shortElid = encodeElidMaxLength(embedding, 50);
+/// ```
+#[cfg(feature = "embeddings")]
+#[wasm_bindgen(js_name = encodeElidMaxLength)]
+pub fn encode_elid_max_length(embedding: &[f64], max_chars: usize) -> Result<String, JsValue> {
+    let embedding_f32: Vec<f32> = embedding.iter().map(|&x| x as f32).collect();
+    let original_dims = embedding_f32.len() as u16;
+    let profile = Profile::max_length(max_chars, original_dims);
+
+    embeddings::encode(&embedding_f32, &profile)
+        .map(|elid| elid.to_string())
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Decode an ELID string back to an embedding vector.
+///
+/// Only works for ELIDs encoded with a FullVector profile (lossless,
+/// compressed, or max_length). Returns null for non-reversible profiles
+/// like Mini128, Morton, or Hilbert.
+///
+/// # Parameters
+///
+/// - `elid_str`: A valid ELID string (base32hex encoded)
+///
+/// # Returns
+///
+/// A Float64Array containing the decoded embedding, or null if the ELID
+/// is not reversible.
+///
+/// Note: If dimension reduction was used during encoding, the decoded
+/// embedding will be in the reduced dimension space, not the original.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { encodeElidLossless, decodeElidToEmbedding, isElidReversible } from 'elid';
+///
+/// const embedding = new Float64Array(768).fill(0.1);
+/// const elid = encodeElidLossless(embedding);
+///
+/// if (isElidReversible(elid)) {
+///     const recovered = decodeElidToEmbedding(elid);
+///     console.log(recovered.length); // 768
+/// }
+/// ```
+#[cfg(feature = "embeddings")]
+#[wasm_bindgen(js_name = decodeElidToEmbedding)]
+pub fn decode_elid_to_embedding(elid_str: String) -> Result<JsValue, JsValue> {
+    let elid =
+        embeddings::Elid::from_string(elid_str).map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    // Check if reversible first
+    if !embeddings::is_reversible(&elid) {
+        return Ok(JsValue::NULL);
+    }
+
+    // Decode to embedding
+    let (values, _metadata) = embeddings::decode_to_embedding(&elid)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    // Convert to Float64Array for JavaScript
+    let f64_values: Vec<f64> = values.iter().map(|&x| x as f64).collect();
+    let array = Float64Array::new_with_length(f64_values.len() as u32);
+    for (i, &val) in f64_values.iter().enumerate() {
+        array.set_index(i as u32, val);
+    }
+
+    Ok(array.into())
+}
+
+/// Check if an ELID can be decoded back to an embedding.
+///
+/// Returns true if the ELID was encoded with a FullVector profile
+/// (lossless, compressed, or max_length), false otherwise.
+///
+/// # Parameters
+///
+/// - `elid_str`: A valid ELID string (base32hex encoded)
+///
+/// # Returns
+///
+/// `true` if decodeElidToEmbedding will return an embedding, `false` otherwise.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { encodeElid, encodeElidLossless, isElidReversible, ElidProfile } from 'elid';
+///
+/// const embedding = new Float64Array(768).fill(0.1);
+///
+/// // Mini128 is NOT reversible
+/// const mini128Elid = encodeElid(embedding, ElidProfile.Mini128);
+/// console.log(isElidReversible(mini128Elid)); // false
+///
+/// // Lossless IS reversible
+/// const losslessElid = encodeElidLossless(embedding);
+/// console.log(isElidReversible(losslessElid)); // true
+/// ```
+#[cfg(feature = "embeddings")]
+#[wasm_bindgen(js_name = isElidReversible)]
+pub fn is_elid_reversible(elid_str: String) -> Result<bool, JsValue> {
+    let elid =
+        embeddings::Elid::from_string(elid_str).map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    Ok(embeddings::is_reversible(&elid))
+}
+
+/// Encode an embedding for cross-dimensional comparison.
+///
+/// Projects the embedding to a common dimension space, allowing comparison
+/// between embeddings of different original dimensions (e.g., 256d vs 768d).
+///
+/// # Parameters
+///
+/// - `embedding`: Float64 array of embedding values (64-2048 dimensions)
+/// - `common_dims`: Target dimension space (all vectors projected here)
+///
+/// # Returns
+///
+/// A base32hex-encoded ELID string.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { encodeElidCrossDimensional, decodeElidToEmbedding } from 'elid';
+///
+/// // Different sized embeddings from different models
+/// const embedding256 = new Float64Array(256).fill(0.1);
+/// const embedding768 = new Float64Array(768).fill(0.1);
+///
+/// // Project both to 128-dim common space
+/// const elid1 = encodeElidCrossDimensional(embedding256, 128);
+/// const elid2 = encodeElidCrossDimensional(embedding768, 128);
+///
+/// // Now they can be compared directly (both decode to 128 dims)
+/// const dec1 = decodeElidToEmbedding(elid1);
+/// const dec2 = decodeElidToEmbedding(elid2);
+/// // Both have length 128
+/// ```
+#[cfg(feature = "embeddings")]
+#[wasm_bindgen(js_name = encodeElidCrossDimensional)]
+pub fn encode_elid_cross_dimensional(
+    embedding: &[f64],
+    common_dims: u16,
+) -> Result<String, JsValue> {
+    let embedding_f32: Vec<f32> = embedding.iter().map(|&x| x as f32).collect();
+    let profile = Profile::cross_dimensional(common_dims);
+
+    embeddings::encode(&embedding_f32, &profile)
+        .map(|elid| elid.to_string())
+        .map_err(|e| JsValue::from_str(&e.to_string()))
+}
+
+/// Get metadata about a FullVector ELID.
+///
+/// Returns an object containing information about how the ELID was encoded,
+/// including original dimensions, precision, and dimension mode.
+///
+/// # Parameters
+///
+/// - `elid_str`: A valid ELID string (base32hex encoded)
+///
+/// # Returns
+///
+/// An object with metadata fields, or null if not a FullVector ELID.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { encodeElidCompressed, getElidMetadata } from 'elid';
+///
+/// const embedding = new Float64Array(768).fill(0.1);
+/// const elid = encodeElidCompressed(embedding, 0.5);
+///
+/// const meta = getElidMetadata(elid);
+/// if (meta) {
+///     console.log(meta.originalDims);  // 768
+///     console.log(meta.encodedDims);   // depends on compression
+///     console.log(meta.isLossless);    // false
+/// }
+/// ```
+#[cfg(feature = "embeddings")]
+#[wasm_bindgen(js_name = getElidMetadata)]
+pub fn get_elid_metadata(elid_str: String) -> Result<JsValue, JsValue> {
+    let elid =
+        embeddings::Elid::from_string(elid_str).map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    // Check if reversible (FullVector)
+    if !embeddings::is_reversible(&elid) {
+        return Ok(JsValue::NULL);
+    }
+
+    // Decode to get metadata
+    let (_values, metadata) = embeddings::decode_to_embedding(&elid)
+        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+    // Build result object
+    let result = Object::new();
+    Reflect::set(
+        &result,
+        &"originalDims".into(),
+        &JsValue::from(metadata.original_dims),
+    )
+    .unwrap();
+    Reflect::set(
+        &result,
+        &"encodedDims".into(),
+        &JsValue::from(metadata.encoded_dims),
+    )
+    .unwrap();
+    Reflect::set(
+        &result,
+        &"isLossless".into(),
+        &JsValue::from(metadata.is_lossless()),
+    )
+    .unwrap();
+    Reflect::set(
+        &result,
+        &"hasDimensionReduction".into(),
+        &JsValue::from(metadata.has_dimension_reduction()),
+    )
+    .unwrap();
+
+    // Precision type as string
+    let precision_str = match metadata.precision {
+        VectorPrecision::Full32 => "Full32",
+        VectorPrecision::Half16 => "Half16",
+        VectorPrecision::Quant8 => "Quant8",
+        VectorPrecision::Bits { bits } => {
+            // Return with bit count
+            Reflect::set(&result, &"precisionBits".into(), &JsValue::from(bits)).unwrap();
+            "Bits"
+        }
+    };
+    Reflect::set(&result, &"precision".into(), &JsValue::from_str(precision_str)).unwrap();
+
+    // Dimension mode as string
+    let mode_str = match metadata.dimension_mode {
+        DimensionMode::Preserve => "Preserve",
+        DimensionMode::Reduce { .. } => "Reduce",
+        DimensionMode::Common { .. } => "Common",
+    };
+    Reflect::set(
+        &result,
+        &"dimensionMode".into(),
+        &JsValue::from_str(mode_str),
+    )
+    .unwrap();
+
+    Ok(result.into())
 }
 
 #[cfg(test)]

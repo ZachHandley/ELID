@@ -92,7 +92,7 @@ jobs:
 
       - name: Build WASM for demo site
         run: |
-          pnpm exec wasm-pack build --target web --out-dir site/public/wasm -- --features wasm
+          pnpm exec wasm-pack build --target web --out-dir site/public/wasm -- --features wasm-embeddings
           rm -f site/public/wasm/.gitignore
 
       - name: Determine version

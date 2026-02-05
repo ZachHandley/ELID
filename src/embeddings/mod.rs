@@ -1,11 +1,12 @@
 //! Embedding encoding module for ELID
 //!
 //! This module provides compact, sortable identifiers for high-dimensional embeddings.
-//! It includes support for three encoding profiles:
+//! It includes support for four encoding profiles:
 //!
 //! - **Mini128**: 128-bit SimHash using signed random projections
 //! - **Morton10x10**: Z-order curve encoding for database indexing
 //! - **Hilbert10x10**: Hilbert curve encoding for maximum locality preservation
+//! - **FullVector**: Reversible encoding with configurable precision and dimension reduction
 //!
 //! # Feature Gate
 //!
@@ -19,6 +20,7 @@
 // Submodules
 pub mod encoding;
 pub mod error;
+pub mod full_vector;
 pub mod hilbert;
 pub mod morton;
 pub mod types;
@@ -27,7 +29,10 @@ pub mod vector_simhash;
 // Re-exports for public API
 pub use encoding::{decode_sortable, encode_sortable};
 pub use error::ElidError;
-pub use types::{Elid, Embedding, Profile, ProfileInfo, QuantizedCoords};
+pub use full_vector::{decode_full_vector, encode_full_vector, FullVectorMetadata};
+pub use types::{
+    DimensionMode, Elid, Embedding, Profile, ProfileInfo, QuantizedCoords, VectorPrecision,
+};
 pub use vector_simhash::{
     cosine_similarity_approx, elid_hamming_distance, simhash_128, simhash_from_bytes,
     simhash_to_bytes,
@@ -67,16 +72,33 @@ pub fn encode(embedding: &[f32], profile: &Profile) -> Result<Elid, ElidError> {
     // Step 1: Create and validate embedding
     let mut emb = Embedding::new(embedding.to_vec())?;
 
-    // Step 2: Normalize to unit length
-    emb.normalize();
+    // Step 2: Normalize to unit length (except for FullVector which may want unnormalized)
+    if !matches!(profile, Profile::FullVector { .. }) {
+        emb.normalize();
+    }
 
     // Step 3: Apply profile-specific encoding
-    let payload_bytes = match profile {
+    let combined_bytes = match profile {
         Profile::Mini128 { seed } => {
             // Compute 128-bit SimHash
             let hash = simhash_128(emb.as_slice(), *seed);
             // Convert to big-endian bytes (16 bytes)
-            simhash_to_bytes(hash).to_vec()
+            let payload = simhash_to_bytes(hash).to_vec();
+
+            // Create header
+            let header = ProfileInfo {
+                version: 0,
+                profile_type: profile.type_id(),
+                transform_id: None,
+                model_id: None,
+                original_dims: None,
+                precision: None,
+                dimension_mode: None,
+                seed: None,
+            };
+            let mut combined = header.to_header();
+            combined.extend_from_slice(&payload);
+            combined
         }
         Profile::Morton10x10 {
             dims,
@@ -91,7 +113,21 @@ pub fn encode(embedding: &[f32], profile: &Profile) -> Result<Elid, ElidError> {
             let quantized = QuantizedCoords::from_embedding(&emb, *dims, *bits_per_dim)?;
             let code = morton_encode(quantized.as_slice(), *bits_per_dim);
             let total_bits = (*dims as usize) * (*bits_per_dim as usize);
-            code_to_bytes(code, total_bits)
+            let payload = code_to_bytes(code, total_bits);
+
+            let header = ProfileInfo {
+                version: 0,
+                profile_type: profile.type_id(),
+                transform_id: None,
+                model_id: None,
+                original_dims: None,
+                precision: None,
+                dimension_mode: None,
+                seed: None,
+            };
+            let mut combined = header.to_header();
+            combined.extend_from_slice(&payload);
+            combined
         }
         Profile::Hilbert10x10 {
             dims,
@@ -106,27 +142,36 @@ pub fn encode(embedding: &[f32], profile: &Profile) -> Result<Elid, ElidError> {
             let quantized = QuantizedCoords::from_embedding(&emb, *dims, *bits_per_dim)?;
             let code = hilbert_encode(quantized.as_slice(), *bits_per_dim);
             let total_bits = (*dims as usize) * (*bits_per_dim as usize);
-            code_to_bytes(code, total_bits)
+            let payload = code_to_bytes(code, total_bits);
+
+            let header = ProfileInfo {
+                version: 0,
+                profile_type: profile.type_id(),
+                transform_id: None,
+                model_id: None,
+                original_dims: None,
+                precision: None,
+                dimension_mode: None,
+                seed: None,
+            };
+            let mut combined = header.to_header();
+            combined.extend_from_slice(&payload);
+            combined
+        }
+        Profile::FullVector {
+            precision,
+            dimensions,
+            seed,
+        } => {
+            // Full vector encoding (reversible)
+            encode_full_vector(emb.as_slice(), *precision, *dimensions, *seed)?
         }
     };
 
-    // Step 4: Create header (version=0, profile_type)
-    let header = ProfileInfo {
-        version: 0,
-        profile_type: profile.type_id(),
-        transform_id: None,
-        model_id: None,
-    };
-    let header_bytes = header.to_header();
+    // Step 4: Encode to base32hex
+    let encoded = encode_sortable(&combined_bytes);
 
-    // Step 5: Combine header + payload
-    let mut combined = header_bytes;
-    combined.extend_from_slice(&payload_bytes);
-
-    // Step 6: Encode to base32hex
-    let encoded = encode_sortable(&combined);
-
-    // Step 7: Create Elid
+    // Step 5: Create Elid
     Elid::from_string(encoded)
 }
 
@@ -144,6 +189,91 @@ pub fn encode(embedding: &[f32], profile: &Profile) -> Result<Elid, ElidError> {
 /// - `Err(ElidError::InvalidEncoding)`: Invalid base32hex string
 pub fn decode(elid: &Elid) -> Result<Vec<u8>, ElidError> {
     decode_sortable(elid.as_str())
+}
+
+/// Decode an ELID back to an embedding vector
+///
+/// Only supported for FullVector profiles. Other profiles use lossy hashing
+/// that cannot be reversed.
+///
+/// # Parameters
+///
+/// - `elid`: The ELID to decode
+///
+/// # Returns
+///
+/// - `Ok((Vec<f32>, FullVectorMetadata))`: Decoded embedding and metadata
+/// - `Err(ElidError::DecodingNotSupported)`: Profile does not support decoding
+///
+/// # Note
+///
+/// If dimension reduction was used during encoding, the decoded embedding
+/// will be in the reduced dimension space, not the original dimension space.
+/// The metadata contains information about the original dimensions.
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use elid::embeddings::{encode, decode_to_embedding, Profile};
+///
+/// let embedding = vec![0.1; 768];
+/// let profile = Profile::lossless();
+/// let elid = encode(&embedding, &profile)?;
+///
+/// let (decoded, metadata) = decode_to_embedding(&elid)?;
+/// assert_eq!(embedding, decoded);
+/// ```
+pub fn decode_to_embedding(elid: &Elid) -> Result<(Vec<f32>, FullVectorMetadata), ElidError> {
+    let bytes = decode(elid)?;
+
+    // Check profile type
+    if bytes.len() < 2 {
+        return Err(ElidError::InvalidHeader);
+    }
+
+    let profile_type = bytes[0] & 0x0F;
+    if profile_type != 0x04 {
+        return Err(ElidError::DecodingNotSupported);
+    }
+
+    // Decode full vector
+    decode_full_vector(&bytes)
+}
+
+/// Check if an ELID can be decoded back to an embedding
+///
+/// Returns `true` if the ELID was encoded with a FullVector profile,
+/// which supports reversible encoding.
+///
+/// # Parameters
+///
+/// - `elid`: The ELID to check
+///
+/// # Returns
+///
+/// `true` if the embedding can be recovered, `false` otherwise
+///
+/// # Examples
+///
+/// ```rust,ignore
+/// use elid::embeddings::{encode, is_reversible, Profile};
+///
+/// let embedding = vec![0.1; 768];
+///
+/// let mini128 = encode(&embedding, &Profile::default())?;
+/// assert!(!is_reversible(&mini128));
+///
+/// let full_vector = encode(&embedding, &Profile::lossless())?;
+/// assert!(is_reversible(&full_vector));
+/// ```
+pub fn is_reversible(elid: &Elid) -> bool {
+    match elid.to_bytes() {
+        Ok(bytes) if bytes.len() >= 2 => {
+            let profile_type = bytes[0] & 0x0F;
+            profile_type == 0x04 // FullVector
+        }
+        _ => false,
+    }
 }
 
 /// Compute Hamming distance between two Mini128 ELIDs
@@ -301,5 +431,192 @@ mod tests {
         };
         let result = encode(&embedding, &profile);
         assert!(result.is_ok(), "Hilbert encoding should work");
+    }
+
+    // ========================================================================
+    // FullVector Tests
+    // ========================================================================
+
+    #[test]
+    fn test_encode_full_vector_lossless() {
+        let embedding: Vec<f32> = (0..128).map(|i| (i as f32 / 64.0) - 1.0).collect();
+        let profile = Profile::lossless();
+
+        let elid = encode(&embedding, &profile).unwrap();
+        assert!(is_reversible(&elid));
+
+        let (decoded, metadata) = decode_to_embedding(&elid).unwrap();
+        assert_eq!(embedding, decoded, "Lossless encoding should be exact");
+        assert!(metadata.is_lossless());
+    }
+
+    #[test]
+    fn test_encode_full_vector_half16() {
+        let embedding: Vec<f32> = (0..768).map(|i| (i as f32 / 384.0) - 1.0).collect();
+        let profile = Profile::FullVector {
+            precision: VectorPrecision::Half16,
+            dimensions: DimensionMode::Preserve,
+            seed: 0,
+        };
+
+        let elid = encode(&embedding, &profile).unwrap();
+        assert!(is_reversible(&elid));
+
+        let (decoded, metadata) = decode_to_embedding(&elid).unwrap();
+        assert_eq!(decoded.len(), embedding.len());
+        assert!(!metadata.is_lossless());
+
+        // Check error is reasonable (half precision)
+        let max_error: f32 = embedding
+            .iter()
+            .zip(decoded.iter())
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0f32, f32::max);
+        assert!(max_error < 0.01, "Half16 max error: {}", max_error);
+    }
+
+    #[test]
+    fn test_encode_full_vector_quant8() {
+        let embedding: Vec<f32> = (0..256).map(|i| (i as f32 / 128.0) - 1.0).collect();
+        let profile = Profile::FullVector {
+            precision: VectorPrecision::Quant8,
+            dimensions: DimensionMode::Preserve,
+            seed: 0,
+        };
+
+        let elid = encode(&embedding, &profile).unwrap();
+        let (decoded, _) = decode_to_embedding(&elid).unwrap();
+
+        // Check error is reasonable (8-bit quantization)
+        let max_error: f32 = embedding
+            .iter()
+            .zip(decoded.iter())
+            .map(|(a, b)| (a - b).abs())
+            .fold(0.0f32, f32::max);
+        assert!(max_error < 0.02, "Quant8 max error: {}", max_error);
+    }
+
+    #[test]
+    fn test_encode_full_vector_dimension_reduction() {
+        let embedding: Vec<f32> = (0..768).map(|i| (i as f32 / 384.0) - 1.0).collect();
+        let profile = Profile::FullVector {
+            precision: VectorPrecision::Full32,
+            dimensions: DimensionMode::Reduce { target_dims: 256 },
+            seed: 0x12345678,
+        };
+
+        let elid = encode(&embedding, &profile).unwrap();
+        let (decoded, metadata) = decode_to_embedding(&elid).unwrap();
+
+        assert_eq!(decoded.len(), 256);
+        assert_eq!(metadata.original_dims, 768);
+        assert_eq!(metadata.encoded_dims, 256);
+        assert!(metadata.has_dimension_reduction());
+    }
+
+    #[test]
+    fn test_encode_full_vector_cross_dimensional() {
+        // Two embeddings of different dimensions
+        let emb_256: Vec<f32> = (0..256).map(|i| (i as f32 / 128.0) - 1.0).collect();
+        let emb_768: Vec<f32> = (0..768).map(|i| (i as f32 / 384.0) - 1.0).collect();
+
+        let profile = Profile::cross_dimensional(128);
+
+        // Encode both - cross_dimensional uses a fixed seed internally
+        let elid_256 = encode(&emb_256, &profile).unwrap();
+        let elid_768 = encode(&emb_768, &profile).unwrap();
+
+        let (dec_256, meta_256) = decode_to_embedding(&elid_256).unwrap();
+        let (dec_768, meta_768) = decode_to_embedding(&elid_768).unwrap();
+
+        // Both should decode to 128 dimensions
+        assert_eq!(dec_256.len(), 128);
+        assert_eq!(dec_768.len(), 128);
+
+        // Metadata should preserve original dimensions
+        assert_eq!(meta_256.original_dims, 256);
+        assert_eq!(meta_768.original_dims, 768);
+
+        // Now they can be directly compared (same dimensionality)
+        let similarity: f32 = dec_256.iter().zip(dec_768.iter()).map(|(a, b)| a * b).sum();
+        // Just verify the comparison is possible, not the specific value
+        assert!(similarity.is_finite());
+    }
+
+    #[test]
+    fn test_is_reversible_mini128() {
+        let embedding = vec![0.1; 128];
+        let profile = Profile::default(); // Mini128
+
+        let elid = encode(&embedding, &profile).unwrap();
+        assert!(!is_reversible(&elid), "Mini128 should not be reversible");
+    }
+
+    #[test]
+    fn test_is_reversible_full_vector() {
+        let embedding = vec![0.1; 128];
+        let profile = Profile::lossless();
+
+        let elid = encode(&embedding, &profile).unwrap();
+        assert!(is_reversible(&elid), "FullVector should be reversible");
+    }
+
+    #[test]
+    fn test_decode_to_embedding_unsupported() {
+        let embedding = vec![0.1; 128];
+        let profile = Profile::default(); // Mini128
+
+        let elid = encode(&embedding, &profile).unwrap();
+        let result = decode_to_embedding(&elid);
+
+        assert!(
+            matches!(result, Err(ElidError::DecodingNotSupported)),
+            "Mini128 should not support decode_to_embedding"
+        );
+    }
+
+    #[test]
+    fn test_profile_max_length_constraint() {
+        let embedding: Vec<f32> = (0..768).map(|i| (i as f32 / 384.0) - 1.0).collect();
+        let max_chars = 100;
+        let profile = Profile::max_length(max_chars, 768);
+
+        let elid = encode(&embedding, &profile).unwrap();
+
+        assert!(
+            elid.as_str().len() <= max_chars,
+            "ELID length {} exceeds max {}",
+            elid.as_str().len(),
+            max_chars
+        );
+    }
+
+    #[test]
+    fn test_profile_compressed_retention() {
+        let embedding: Vec<f32> = (0..768).map(|i| (i as f32 / 384.0) - 1.0).collect();
+
+        // Test various retention levels
+        for retention in [1.0, 0.5, 0.25, 0.1] {
+            let profile = Profile::compressed(retention, 768);
+            let elid = encode(&embedding, &profile).unwrap();
+
+            // Should encode successfully
+            assert!(is_reversible(&elid));
+
+            // Verify output size is proportional to retention (roughly)
+            let full_size = Profile::lossless().string_length_for_dims(768);
+            let compressed_size = elid.as_str().len();
+
+            // Allow some variance due to header overhead and rounding
+            if retention < 0.9 {
+                assert!(
+                    compressed_size < full_size,
+                    "Retention {} should reduce size (full: {}, compressed: {})",
+                    retention,
+                    full_size,
+                    compressed_size
+                );
+            }
+        }
     }
 }

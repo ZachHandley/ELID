@@ -38,13 +38,13 @@ jobs:
           components: clippy
 
       - name: Run tests
-        run: cargo test --features ffi,wasm
+        run: cargo test --features ffi,wasm-embeddings
 
       - name: Build release
         run: cargo build --release
 
       - name: Build FFI
-        run: cargo build --release --features ffi
+        run: cargo build --release --features ffi,embeddings
 
   build-wasm:
     name: Build WASM
@@ -113,7 +113,7 @@ jobs:
           python-version: '3.12'
 
       - name: Build wheel
-        run: uv run maturin build --release --features python --out dist
+        run: uv run maturin build --release --features python-embeddings --out dist
 
       - name: Upload Python wheel
         uses: https://github.com/christopherhx/gitea-upload-artifact@v4
@@ -147,20 +147,22 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           BODY="## ELID ${TAG}
 
-          Fast string similarity library with multi-language support.
+          **Embedding Locality IDentifier** - Vector search without vector stores, plus fast string similarity.
 
-          ### Packages
+          ### Installation
           - **Rust**: \`cargo add elid\`
-          - **WASM**: Download artifacts below
-          - **Python**: Download wheel below
+          - **Python**: \`pip install elid\`
+          - **WASM/JS**: \`npm install elid-wasm\`
 
-          ### Algorithms
-          - Levenshtein distance
-          - Jaro-Winkler similarity
-          - Hamming distance
-          - OSA distance (with transpositions)
-          - SimHash (locality-sensitive hashing)
-          - Best match (multi-algorithm)
+          ### Embedding Encoding (NEW)
+          - Lossless, compressed, or max-length encoding
+          - Cross-dimensional comparison (compare 256d vs 768d vectors)
+          - Mini128, Morton, Hilbert curve profiles
+
+          ### String Similarity
+          - Levenshtein, Jaro-Winkler, Hamming, OSA
+          - SimHash for near-duplicate detection
+          - Best match finder
           "
 
           # Create release via Forgejo API

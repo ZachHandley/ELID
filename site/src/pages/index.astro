@@ -3,9 +3,11 @@ import Layout from "../layouts/Layout.astro";
 import AlgorithmComparison from "../components/AlgorithmComparison.vue";
 import LiveSearch from "../components/LiveSearch.vue";
 import SimHashVisualizer from "../components/SimHashVisualizer.vue";
+import EmbeddingEncoder from "../components/EmbeddingEncoder.vue";
+import CrossDimensionalDemo from "../components/CrossDimensionalDemo.vue";
 ---
 
-<Layout title="ELID - String Similarity Playground">
+<Layout title="ELID - Embedding Locality IDentifier">
   <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
     <!-- Header -->
     <header class="text-center mb-12 sm:mb-16">
@@ -17,17 +19,18 @@ import SimHashVisualizer from "../components/SimHashVisualizer.vue";
       <p
         class="text-lg sm:text-xl text-elid-text-muted font-medium mb-6"
       >
-        String Similarity Playground
+        Embedding Locality IDentifier
       </p>
       <p
         class="max-w-2xl mx-auto text-sm sm:text-base text-elid-text-muted/80 leading-relaxed"
       >
-        Compare string similarity algorithms side by side. ELID is a Rust
-        library compiled to WebAssembly -- every computation runs entirely in
-        your browser. No data leaves your machine.
+        Encode high-dimensional embedding vectors into compact, sortable strings.
+        Similar embeddings produce lexicographically similar ELIDs, enabling vector
+        search using standard string indexes. Plus: blazing-fast string similarity algorithms.
+        All powered by Rust compiled to WebAssembly -- every computation runs entirely in your browser.
       </p>
       <div
-        class="flex items-center justify-center gap-3 mt-5 text-xs text-elid-text-muted/60"
+        class="flex items-center justify-center gap-3 mt-5 text-xs text-elid-text-muted/60 flex-wrap"
       >
         <span
           class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-elid-surface border border-elid-border/50 rounded-full"
@@ -46,16 +49,223 @@ import SimHashVisualizer from "../components/SimHashVisualizer.vue";
         >
           Zero Dependencies
         </span>
+        <span
+          class="inline-flex items-center gap-1.5 px-2.5 py-1 bg-elid-surface border border-elid-border/50 rounded-full"
+        >
+          Multi-Language Bindings
+        </span>
       </div>
     </header>
 
-    <!-- Section 1: Algorithm Comparison -->
-    <section id="compare" class="mb-16">
+    <!-- Navigation -->
+    <nav class="mb-12 overflow-x-auto">
+      <div class="flex gap-2 min-w-max pb-2">
+        <a
+          href="#embeddings"
+          class="px-4 py-2 text-sm font-medium bg-elid-accent/10 border border-elid-accent/30 text-elid-accent rounded-lg hover:bg-elid-accent/20 transition-colors"
+        >
+          Embedding Encoding
+        </a>
+        <a
+          href="#cross-dimensional"
+          class="px-4 py-2 text-sm font-medium bg-elid-surface border border-elid-border/50 text-elid-text-muted rounded-lg hover:border-elid-border hover:text-elid-text transition-colors"
+        >
+          Cross-Dimensional
+        </a>
+        <a
+          href="#compare"
+          class="px-4 py-2 text-sm font-medium bg-elid-surface border border-elid-border/50 text-elid-text-muted rounded-lg hover:border-elid-border hover:text-elid-text transition-colors"
+        >
+          String Similarity
+        </a>
+        <a
+          href="#search"
+          class="px-4 py-2 text-sm font-medium bg-elid-surface border border-elid-border/50 text-elid-text-muted rounded-lg hover:border-elid-border hover:text-elid-text transition-colors"
+        >
+          Fuzzy Search
+        </a>
+        <a
+          href="#simhash"
+          class="px-4 py-2 text-sm font-medium bg-elid-surface border border-elid-border/50 text-elid-text-muted rounded-lg hover:border-elid-border hover:text-elid-text transition-colors"
+        >
+          SimHash
+        </a>
+      </div>
+    </nav>
+
+    <!-- Section: Embedding Encoding -->
+    <section id="embeddings" class="mb-16">
       <div class="flex items-center gap-3 mb-6">
         <div
           class="w-10 h-10 rounded-lg bg-elid-accent/10 flex items-center justify-center"
         >
           <span class="text-elid-accent text-lg font-bold">1</span>
+        </div>
+        <div>
+          <h2 class="text-xl sm:text-2xl font-bold">Embedding Encoding</h2>
+          <p class="text-sm text-elid-text-muted">
+            Convert vector embeddings to sortable string identifiers
+          </p>
+        </div>
+      </div>
+
+      <!-- Profile Table -->
+      <div class="bg-elid-surface border border-elid-border/50 rounded-xl p-5 sm:p-6 mb-6">
+        <h3 class="font-semibold mb-4 flex items-center gap-2">
+          <svg class="w-5 h-5 text-elid-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+          </svg>
+          Encoding Profiles
+        </h3>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-left text-elid-text-muted border-b border-elid-border/50">
+                <th class="pb-3 pr-4 font-medium">Profile</th>
+                <th class="pb-3 pr-4 font-medium">Use Case</th>
+                <th class="pb-3 pr-4 font-medium">Reversible</th>
+                <th class="pb-3 font-medium">Output Size</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-elid-border/30">
+              <tr>
+                <td class="py-3 pr-4 font-mono text-elid-accent">Mini128</td>
+                <td class="py-3 pr-4 text-elid-text-muted">Fast similarity via Hamming distance</td>
+                <td class="py-3 pr-4">
+                  <span class="text-elid-red">No</span>
+                </td>
+                <td class="py-3 font-mono text-xs">26 chars</td>
+              </tr>
+              <tr>
+                <td class="py-3 pr-4 font-mono text-elid-accent">Morton10x10</td>
+                <td class="py-3 pr-4 text-elid-text-muted">Z-order curve, good for range queries</td>
+                <td class="py-3 pr-4">
+                  <span class="text-elid-red">No</span>
+                </td>
+                <td class="py-3 font-mono text-xs">~20 chars</td>
+              </tr>
+              <tr>
+                <td class="py-3 pr-4 font-mono text-elid-accent">Hilbert10x10</td>
+                <td class="py-3 pr-4 text-elid-text-muted">Best locality preservation</td>
+                <td class="py-3 pr-4">
+                  <span class="text-elid-red">No</span>
+                </td>
+                <td class="py-3 font-mono text-xs">~20 chars</td>
+              </tr>
+              <tr>
+                <td class="py-3 pr-4 font-mono text-elid-green">Lossless</td>
+                <td class="py-3 pr-4 text-elid-text-muted">Exact embedding storage and retrieval</td>
+                <td class="py-3 pr-4">
+                  <span class="text-elid-green">Yes</span>
+                </td>
+                <td class="py-3 font-mono text-xs">~dims x 6 chars</td>
+              </tr>
+              <tr>
+                <td class="py-3 pr-4 font-mono text-elid-green">Compressed</td>
+                <td class="py-3 pr-4 text-elid-text-muted">Tunable size/fidelity trade-off</td>
+                <td class="py-3 pr-4">
+                  <span class="text-elid-green">Yes</span>
+                </td>
+                <td class="py-3 font-mono text-xs">Variable</td>
+              </tr>
+              <tr>
+                <td class="py-3 pr-4 font-mono text-elid-green">MaxLength</td>
+                <td class="py-3 pr-4 text-elid-text-muted">Fit in database column constraints</td>
+                <td class="py-3 pr-4">
+                  <span class="text-elid-green">Yes</span>
+                </td>
+                <td class="py-3 font-mono text-xs">User-defined</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div
+        class="bg-elid-surface border border-elid-border/50 rounded-xl p-5 sm:p-6"
+      >
+        <EmbeddingEncoder client:load />
+      </div>
+    </section>
+
+    <!-- Section: Cross-Dimensional -->
+    <section id="cross-dimensional" class="mb-16">
+      <div class="flex items-center gap-3 mb-6">
+        <div
+          class="w-10 h-10 rounded-lg bg-elid-accent/10 flex items-center justify-center"
+        >
+          <span class="text-elid-accent text-lg font-bold">2</span>
+        </div>
+        <div>
+          <h2 class="text-xl sm:text-2xl font-bold">Cross-Dimensional Comparison</h2>
+          <p class="text-sm text-elid-text-muted">
+            Compare embeddings from different models with different dimensions
+          </p>
+        </div>
+      </div>
+      <div
+        class="bg-elid-surface border border-elid-border/50 rounded-xl p-5 sm:p-6"
+      >
+        <CrossDimensionalDemo client:load />
+      </div>
+    </section>
+
+    <!-- Section: What is ELID? -->
+    <section class="mb-16">
+      <div class="bg-gradient-to-br from-elid-accent/10 to-elid-green/10 border border-elid-accent/20 rounded-xl p-6 sm:p-8">
+        <h2 class="text-2xl font-bold mb-4 flex items-center gap-3">
+          <svg class="w-7 h-7 text-elid-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+          </svg>
+          Vector Search Without Vector Stores
+        </h2>
+        <div class="grid md:grid-cols-2 gap-6 text-sm text-elid-text-muted">
+          <div>
+            <h3 class="font-semibold text-elid-text mb-2">The Problem</h3>
+            <p class="mb-3">
+              Semantic search requires vector databases (Pinecone, Milvus, Weaviate) that add infrastructure
+              complexity and cost. You cannot use standard SQL databases efficiently for similarity search
+              because vectors don't have natural ordering.
+            </p>
+            <h3 class="font-semibold text-elid-text mb-2">The ELID Solution</h3>
+            <p>
+              ELID encodes embeddings into strings where <strong class="text-elid-accent">lexicographic order
+              approximates semantic similarity</strong>. Store ELIDs in any database with a B-tree index
+              (PostgreSQL, SQLite, DynamoDB) and use standard string operations for similarity search.
+            </p>
+          </div>
+          <div>
+            <h3 class="font-semibold text-elid-text mb-2">Example Usage</h3>
+            <pre class="bg-elid-bg rounded-lg p-4 overflow-x-auto text-xs font-mono"><code class="text-elid-text-muted"><span class="text-elid-accent">-- Store with standard index</span>
+CREATE INDEX idx_elid ON documents(elid);
+
+<span class="text-elid-accent">-- Find similar documents</span>
+SELECT * FROM documents
+WHERE elid BETWEEN 'abc...' AND 'abd...'
+ORDER BY elid
+LIMIT 10;</code></pre>
+            <p class="mt-3 text-xs">
+              Works with any database that supports string indexing. No special extensions required.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Divider -->
+    <div class="flex items-center gap-4 mb-16">
+      <div class="flex-1 h-px bg-elid-border/30"></div>
+      <span class="text-sm text-elid-text-muted font-medium">String Similarity Tools</span>
+      <div class="flex-1 h-px bg-elid-border/30"></div>
+    </div>
+
+    <!-- Section 3: Algorithm Comparison -->
+    <section id="compare" class="mb-16">
+      <div class="flex items-center gap-3 mb-6">
+        <div
+          class="w-10 h-10 rounded-lg bg-elid-accent/10 flex items-center justify-center"
+        >
+          <span class="text-elid-accent text-lg font-bold">3</span>
         </div>
         <div>
           <h2 class="text-xl sm:text-2xl font-bold">Algorithm Comparison</h2>
@@ -71,13 +281,13 @@ import SimHashVisualizer from "../components/SimHashVisualizer.vue";
       </div>
     </section>
 
-    <!-- Section 2: Live Search -->
+    <!-- Section 4: Live Search -->
     <section id="search" class="mb-16">
       <div class="flex items-center gap-3 mb-6">
         <div
           class="w-10 h-10 rounded-lg bg-elid-accent/10 flex items-center justify-center"
         >
-          <span class="text-elid-accent text-lg font-bold">2</span>
+          <span class="text-elid-accent text-lg font-bold">4</span>
         </div>
         <div>
           <h2 class="text-xl sm:text-2xl font-bold">Fuzzy Search</h2>
@@ -93,13 +303,13 @@ import SimHashVisualizer from "../components/SimHashVisualizer.vue";
       </div>
     </section>
 
-    <!-- Section 3: SimHash Visualizer -->
+    <!-- Section 5: SimHash Visualizer -->
     <section id="simhash" class="mb-16">
       <div class="flex items-center gap-3 mb-6">
         <div
           class="w-10 h-10 rounded-lg bg-elid-accent/10 flex items-center justify-center"
         >
-          <span class="text-elid-accent text-lg font-bold">3</span>
+          <span class="text-elid-accent text-lg font-bold">5</span>
         </div>
         <div>
           <h2 class="text-xl sm:text-2xl font-bold">SimHash Visualizer</h2>
@@ -126,7 +336,7 @@ import SimHashVisualizer from "../components/SimHashVisualizer.vue";
         <span class="text-elid-text">Astro</span>, and
         <span class="text-elid-text">Vue</span>.
       </p>
-      <div class="flex items-center justify-center gap-4">
+      <div class="flex items-center justify-center gap-4 flex-wrap">
         <a
           href="https://forge.blackleafdigital.com/BlackLeafDigital/ELID"
           target="_blank"
@@ -134,6 +344,48 @@ import SimHashVisualizer from "../components/SimHashVisualizer.vue";
           class="inline-flex items-center gap-2 px-4 py-2 bg-elid-surface border border-elid-border/50 rounded-lg hover:border-elid-accent hover:text-elid-accent transition-colors"
         >
           Source Code
+          <svg
+            class="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+            ></path>
+          </svg>
+        </a>
+        <a
+          href="https://crates.io/crates/elid"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-2 px-4 py-2 bg-elid-surface border border-elid-border/50 rounded-lg hover:border-elid-accent hover:text-elid-accent transition-colors"
+        >
+          crates.io
+          <svg
+            class="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+            ></path>
+          </svg>
+        </a>
+        <a
+          href="https://www.npmjs.com/package/elid-wasm"
+          target="_blank"
+          rel="noopener noreferrer"
+          class="inline-flex items-center gap-2 px-4 py-2 bg-elid-surface border border-elid-border/50 rounded-lg hover:border-elid-accent hover:text-elid-accent transition-colors"
+        >
+          npm
           <svg
             class="w-4 h-4"
             fill="none"

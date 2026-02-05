@@ -5,11 +5,134 @@
 //! - [`Profile`]: Encoding strategy configuration
 //! - [`ProfileInfo`]: Metadata extracted from ID headers
 //! - [`Embedding`]: Input vector representation
+//! - [`VectorPrecision`]: Precision options for full vector encoding
+//! - [`DimensionMode`]: Dimension handling modes for projection/reduction
 
 use super::encoding::decode_sortable;
 use super::error::ElidError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+
+// ============================================================================
+// VectorPrecision - Precision options for full vector encoding
+// ============================================================================
+
+/// Precision options for full vector encoding
+///
+/// Controls how many bits are used to represent each dimension value.
+/// Higher precision means more accurate reconstruction but larger output.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum VectorPrecision {
+    /// Full 32-bit float (lossless, 4 bytes per dimension)
+    #[default]
+    Full32,
+    /// 16-bit half-precision float (2 bytes per dimension)
+    Half16,
+    /// 8-bit quantized (1 byte per dimension, ~1% error)
+    Quant8,
+    /// Custom bit depth (1-32 bits per dimension)
+    Bits {
+        /// Number of bits per dimension (1-32)
+        bits: u8,
+    },
+}
+
+impl VectorPrecision {
+    /// Get the number of bits used per dimension
+    #[must_use]
+    pub fn bits_per_dim(&self) -> u8 {
+        match self {
+            VectorPrecision::Full32 => 32,
+            VectorPrecision::Half16 => 16,
+            VectorPrecision::Quant8 => 8,
+            VectorPrecision::Bits { bits } => *bits,
+        }
+    }
+
+    /// Validate the precision settings
+    pub fn validate(&self) -> Result<(), ElidError> {
+        match self {
+            VectorPrecision::Bits { bits } if *bits == 0 || *bits > 32 => Err(
+                ElidError::InvalidPrecision(format!("Bits must be 1-32, got {}", bits)),
+            ),
+            _ => Ok(()),
+        }
+    }
+}
+
+// ============================================================================
+// DimensionMode - Dimension handling modes
+// ============================================================================
+
+/// Dimension handling mode for full vector encoding
+///
+/// Controls whether to preserve original dimensions, reduce them,
+/// or project to a common space for cross-dimensional comparison.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "mode", rename_all = "snake_case")]
+pub enum DimensionMode {
+    /// Preserve all original dimensions (no projection)
+    #[default]
+    Preserve,
+    /// Reduce to target dimensions using random projection
+    Reduce {
+        /// Target number of dimensions (must be < original)
+        target_dims: u16,
+    },
+    /// Project to common space for cross-dimensional comparison
+    ///
+    /// This allows comparing vectors of different original dimensions
+    /// by projecting them to the same intermediate space.
+    Common {
+        /// Common dimension space (all vectors projected to this)
+        dims: u16,
+    },
+}
+
+impl DimensionMode {
+    /// Get the output dimension count for a given input dimension
+    #[must_use]
+    pub fn output_dims(&self, input_dims: u16) -> u16 {
+        match self {
+            DimensionMode::Preserve => input_dims,
+            DimensionMode::Reduce { target_dims } => *target_dims,
+            DimensionMode::Common { dims } => *dims,
+        }
+    }
+
+    /// Validate the dimension mode against input dimensions
+    pub fn validate(&self, input_dims: u16) -> Result<(), ElidError> {
+        match self {
+            DimensionMode::Preserve => Ok(()),
+            DimensionMode::Reduce { target_dims } => {
+                if *target_dims == 0 {
+                    Err(ElidError::InvalidDimension {
+                        got: 0,
+                        expected_range: (1, input_dims as usize),
+                    })
+                } else if *target_dims >= input_dims {
+                    Err(ElidError::ProjectionError(format!(
+                        "Target dims {} must be less than input dims {}",
+                        target_dims, input_dims
+                    )))
+                } else {
+                    Ok(())
+                }
+            }
+            DimensionMode::Common { dims } => {
+                if *dims == 0 {
+                    Err(ElidError::InvalidDimension {
+                        got: 0,
+                        expected_range: (1, 2048),
+                    })
+                } else {
+                    Ok(())
+                }
+            }
+        }
+    }
+}
 
 // ============================================================================
 // Elid - The primary output type
@@ -135,10 +258,32 @@ pub enum Profile {
         #[serde(skip_serializing_if = "Option::is_none")]
         transform_id: Option<u16>,
     },
+
+    /// Full vector encoding (reversible, supports various precisions)
+    ///
+    /// Encodes the full embedding vector with configurable precision and
+    /// optional dimension reduction. Supports lossless and lossy modes.
+    ///
+    /// Key features:
+    /// - Reversible: Can decode back to original embedding
+    /// - Precision options: Full32, Half16, Quant8, or custom bits
+    /// - Dimension reduction: Random projection for size reduction
+    /// - Cross-dimensional comparison: Project different-sized vectors to common space
+    FullVector {
+        /// Precision for each dimension value
+        precision: VectorPrecision,
+        /// How to handle dimensions (preserve, reduce, or common space)
+        dimensions: DimensionMode,
+        /// Seed for deterministic random projections (used for dimension reduction)
+        seed: u64,
+    },
 }
 
 impl Profile {
-    /// Expected output length in bits
+    /// Expected output length in bits (excluding header)
+    ///
+    /// For FullVector, this is approximate and depends on original dimensions.
+    /// Use `bit_length_for_dims` for FullVector with known dimensions.
     #[must_use]
     pub fn bit_length(&self) -> usize {
         match self {
@@ -149,6 +294,39 @@ impl Profile {
             | Profile::Hilbert10x10 {
                 dims, bits_per_dim, ..
             } => (*dims as usize) * (*bits_per_dim as usize),
+            Profile::FullVector {
+                precision,
+                dimensions,
+                ..
+            } => {
+                // Default estimate for 768-dim embeddings
+                let output_dims = dimensions.output_dims(768);
+                (output_dims as usize) * (precision.bits_per_dim() as usize)
+            }
+        }
+    }
+
+    /// Expected output length in bits for a given input dimension count
+    ///
+    /// More accurate than `bit_length()` for FullVector profiles.
+    #[must_use]
+    pub fn bit_length_for_dims(&self, input_dims: u16) -> usize {
+        match self {
+            Profile::Mini128 { .. } => 128,
+            Profile::Morton10x10 {
+                dims, bits_per_dim, ..
+            }
+            | Profile::Hilbert10x10 {
+                dims, bits_per_dim, ..
+            } => (*dims as usize) * (*bits_per_dim as usize),
+            Profile::FullVector {
+                precision,
+                dimensions,
+                ..
+            } => {
+                let output_dims = dimensions.output_dims(input_dims);
+                (output_dims as usize) * (precision.bits_per_dim() as usize)
+            }
         }
     }
 
@@ -158,7 +336,22 @@ impl Profile {
     /// `ceil(bit_length / 5)`.
     #[must_use]
     pub fn string_length(&self) -> usize {
-        self.bit_length().div_ceil(5)
+        // Add header bits (16 bits for basic header, up to 96 for extended)
+        let header_bits = match self {
+            Profile::FullVector { .. } => 96, // Extended header for full vector
+            _ => 16,
+        };
+        (self.bit_length() + header_bits).div_ceil(5)
+    }
+
+    /// Expected base32hex string length for given input dimensions
+    #[must_use]
+    pub fn string_length_for_dims(&self, input_dims: u16) -> usize {
+        let header_bits = match self {
+            Profile::FullVector { .. } => 96, // Extended header for full vector
+            _ => 16,
+        };
+        (self.bit_length_for_dims(input_dims) + header_bits).div_ceil(5)
     }
 
     /// Profile type ID (for header encoding)
@@ -167,12 +360,226 @@ impl Profile {
     /// - `0x01`: Mini128
     /// - `0x02`: Morton10x10
     /// - `0x03`: Hilbert10x10
+    /// - `0x04`: FullVector
     #[must_use]
     pub fn type_id(&self) -> u8 {
         match self {
             Profile::Mini128 { .. } => 0x01,
             Profile::Morton10x10 { .. } => 0x02,
             Profile::Hilbert10x10 { .. } => 0x03,
+            Profile::FullVector { .. } => 0x04,
+        }
+    }
+
+    /// Check if this profile supports decoding back to the original embedding
+    #[must_use]
+    pub fn is_reversible(&self) -> bool {
+        matches!(self, Profile::FullVector { .. })
+    }
+
+    // ========================================================================
+    // Convenience Constructors
+    // ========================================================================
+
+    /// Create a lossless full vector profile (Full32 precision, preserve all dims)
+    ///
+    /// This produces the largest output but allows exact reconstruction
+    /// of the original embedding.
+    #[must_use]
+    pub fn lossless() -> Self {
+        Profile::FullVector {
+            precision: VectorPrecision::Full32,
+            dimensions: DimensionMode::Preserve,
+            seed: 0x454c4944_46554c4c, // "ELIDFULL"
+        }
+    }
+
+    /// Create a compressed profile with specified retention percentage
+    ///
+    /// The retention percentage (0.0-1.0) controls how much information is preserved:
+    /// - 1.0 = lossless (Full32 precision, all dimensions)
+    /// - 0.5 = half precision and/or half dimensions
+    /// - 0.25 = quarter precision and/or quarter dimensions
+    ///
+    /// The algorithm optimizes for dimension reduction first (which preserves
+    /// more geometric relationships) before reducing precision.
+    ///
+    /// # Parameters
+    ///
+    /// - `retention_pct`: Information retention (0.0-1.0)
+    /// - `original_dims`: Original embedding dimension count
+    ///
+    /// # Returns
+    ///
+    /// A FullVector profile configured for the target retention
+    #[must_use]
+    pub fn compressed(retention_pct: f32, original_dims: u16) -> Self {
+        let retention = retention_pct.clamp(0.01, 1.0);
+
+        // Full lossless = 32 bits * original_dims
+        let full_bits = 32.0 * original_dims as f32;
+        let target_bits = full_bits * retention;
+
+        // Strategy: prefer dimension reduction over precision reduction
+        // because it preserves more geometric relationships
+
+        // Start with Full32 and reduce dimensions
+        let full32_target_dims = (target_bits / 32.0).round() as u16;
+        if full32_target_dims >= original_dims {
+            // No reduction needed
+            return Profile::lossless();
+        }
+
+        if full32_target_dims >= original_dims / 4 {
+            // Use Full32 with dimension reduction
+            return Profile::FullVector {
+                precision: VectorPrecision::Full32,
+                dimensions: DimensionMode::Reduce {
+                    target_dims: full32_target_dims.max(1),
+                },
+                seed: 0x454c4944_434f4d50, // "ELIDCOMP"
+            };
+        }
+
+        // Try Half16 with dimension reduction
+        let half16_target_dims = (target_bits / 16.0).round() as u16;
+        if half16_target_dims >= original_dims / 4 {
+            return Profile::FullVector {
+                precision: VectorPrecision::Half16,
+                dimensions: if half16_target_dims >= original_dims {
+                    DimensionMode::Preserve
+                } else {
+                    DimensionMode::Reduce {
+                        target_dims: half16_target_dims.max(1),
+                    }
+                },
+                seed: 0x454c4944_434f4d50,
+            };
+        }
+
+        // Try Quant8 with dimension reduction
+        let quant8_target_dims = (target_bits / 8.0).round() as u16;
+        Profile::FullVector {
+            precision: VectorPrecision::Quant8,
+            dimensions: if quant8_target_dims >= original_dims {
+                DimensionMode::Preserve
+            } else {
+                DimensionMode::Reduce {
+                    target_dims: quant8_target_dims.max(1),
+                }
+            },
+            seed: 0x454c4944_434f4d50,
+        }
+    }
+
+    /// Create a profile optimized for a maximum output string length
+    ///
+    /// Calculates the optimal precision and dimension settings to fit
+    /// within the specified character limit while maximizing fidelity.
+    ///
+    /// # Parameters
+    ///
+    /// - `max_chars`: Maximum output string length in characters
+    /// - `original_dims`: Original embedding dimension count
+    ///
+    /// # Returns
+    ///
+    /// A FullVector profile configured for the target length
+    #[must_use]
+    pub fn max_length(max_chars: usize, original_dims: u16) -> Self {
+        // Base32hex: 5 bits per character
+        // Header: 12 bytes (96 bits = ~20 chars)
+        let header_chars = 20;
+        let payload_chars = max_chars.saturating_sub(header_chars);
+        let payload_bits = payload_chars * 5;
+
+        if payload_bits == 0 {
+            // Minimum viable encoding
+            return Profile::FullVector {
+                precision: VectorPrecision::Bits { bits: 1 },
+                dimensions: DimensionMode::Reduce { target_dims: 1 },
+                seed: 0x454c4944_4d41584c, // "ELIDMAXL"
+            };
+        }
+
+        // Calculate what we can fit
+        let bits_per_dim_full32 = payload_bits / original_dims as usize;
+
+        if bits_per_dim_full32 >= 32 {
+            // Can fit full lossless
+            return Profile::lossless();
+        }
+
+        // Try different precision levels
+        let precisions = [
+            (VectorPrecision::Full32, 32),
+            (VectorPrecision::Half16, 16),
+            (VectorPrecision::Quant8, 8),
+            (VectorPrecision::Bits { bits: 4 }, 4),
+            (VectorPrecision::Bits { bits: 2 }, 2),
+            (VectorPrecision::Bits { bits: 1 }, 1),
+        ];
+
+        for (precision, bits) in precisions {
+            let dims_that_fit = payload_bits / bits;
+            if dims_that_fit >= original_dims as usize {
+                // All dimensions fit at this precision
+                return Profile::FullVector {
+                    precision,
+                    dimensions: DimensionMode::Preserve,
+                    seed: 0x454c4944_4d41584c,
+                };
+            } else if dims_that_fit >= 16 {
+                // Reasonable number of dimensions at this precision
+                return Profile::FullVector {
+                    precision,
+                    dimensions: DimensionMode::Reduce {
+                        target_dims: dims_that_fit as u16,
+                    },
+                    seed: 0x454c4944_4d41584c,
+                };
+            }
+        }
+
+        // Fallback to minimum
+        Profile::FullVector {
+            precision: VectorPrecision::Bits { bits: 1 },
+            dimensions: DimensionMode::Reduce {
+                target_dims: (payload_bits as u16).max(1),
+            },
+            seed: 0x454c4944_4d41584c,
+        }
+    }
+
+    /// Create a profile for cross-dimensional comparison
+    ///
+    /// Projects all vectors to a common dimension space, allowing comparison
+    /// between embeddings of different original dimensions (e.g., 256d vs 768d).
+    ///
+    /// # Parameters
+    ///
+    /// - `common_dims`: Target dimension space (vectors will be projected here)
+    /// - `precision`: Precision for the projected values (default: Half16)
+    ///
+    /// # Returns
+    ///
+    /// A FullVector profile configured for cross-dimensional comparison
+    #[must_use]
+    pub fn cross_dimensional(common_dims: u16) -> Self {
+        Profile::FullVector {
+            precision: VectorPrecision::Half16,
+            dimensions: DimensionMode::Common { dims: common_dims },
+            seed: 0x454c4944_58444949, // "ELIDXDIM"
+        }
+    }
+
+    /// Create a cross-dimensional profile with custom precision
+    #[must_use]
+    pub fn cross_dimensional_with_precision(common_dims: u16, precision: VectorPrecision) -> Self {
+        Profile::FullVector {
+            precision,
+            dimensions: DimensionMode::Common { dims: common_dims },
+            seed: 0x454c4944_58444949,
         }
     }
 }
@@ -196,12 +603,19 @@ impl Default for Profile {
 ///
 /// The first 2 bytes of an ELID contain metadata about the encoding profile
 /// used. Extended headers may include additional fields like transform IDs.
+///
+/// For FullVector profiles, the extended header contains:
+/// - Bytes 2-3: Original dimension count (u16 big-endian)
+/// - Byte 4: Precision type (0=Full32, 1=Half16, 2=Quant8, 3+=Bits(n-3))
+/// - Byte 5: Dimension mode (0=Preserve, 1=Reduce, 2=Common)
+/// - Bytes 6-7: Target/common dimensions if applicable (u16 big-endian)
+/// - Bytes 8-11: Seed lower 32 bits (optional, for reproducibility)
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProfileInfo {
     /// Version of ELID format (for backward compatibility)
     pub version: u8,
 
-    /// Profile type ID (0x01=Mini128, 0x02=Morton, 0x03=Hilbert)
+    /// Profile type ID (0x01=Mini128, 0x02=Morton, 0x03=Hilbert, 0x04=FullVector)
     pub profile_type: u8,
 
     /// Optional transform ID (for PCA/OPQ rotation)
@@ -209,6 +623,18 @@ pub struct ProfileInfo {
 
     /// Optional model ID (for tracking which embedding model was used)
     pub model_id: Option<u16>,
+
+    /// Original dimension count (FullVector only)
+    pub original_dims: Option<u16>,
+
+    /// Precision type for FullVector
+    pub precision: Option<VectorPrecision>,
+
+    /// Dimension mode for FullVector
+    pub dimension_mode: Option<DimensionMode>,
+
+    /// Seed for deterministic operations
+    pub seed: Option<u64>,
 }
 
 impl ProfileInfo {
@@ -216,8 +642,15 @@ impl ProfileInfo {
     ///
     /// The header format is:
     /// - Byte 0: `(version << 4) | profile_type`
-    /// - Byte 1: Reserved
-    /// - Bytes 2-3: Optional transform_id (big-endian u16)
+    /// - Byte 1: Reserved / flags
+    /// - Bytes 2-3: Optional transform_id (big-endian u16) for non-FullVector
+    ///
+    /// For FullVector (type 0x04), extended header:
+    /// - Bytes 2-3: Original dimensions (u16 big-endian)
+    /// - Byte 4: Precision type
+    /// - Byte 5: Dimension mode
+    /// - Bytes 6-7: Target/common dimensions (u16 big-endian)
+    /// - Bytes 8-11: Seed lower 32 bits
     ///
     /// # Errors
     ///
@@ -230,6 +663,11 @@ impl ProfileInfo {
         let version = (header[0] & 0xF0) >> 4; // Upper 4 bits
         let profile_type = header[0] & 0x0F; // Lower 4 bits
 
+        // FullVector has extended header
+        if profile_type == 0x04 {
+            return Self::from_full_vector_header(version, header);
+        }
+
         // Extended header fields (optional, for v0.2+)
         let transform_id = if header.len() >= 4 {
             Some(u16::from_be_bytes([header[2], header[3]]))
@@ -241,7 +679,66 @@ impl ProfileInfo {
             version,
             profile_type,
             transform_id,
-            model_id: None, // Reserved for future use
+            model_id: None,
+            original_dims: None,
+            precision: None,
+            dimension_mode: None,
+            seed: None,
+        })
+    }
+
+    /// Decode FullVector extended header
+    fn from_full_vector_header(version: u8, header: &[u8]) -> Result<Self, ElidError> {
+        // FullVector requires at least 12 bytes header
+        if header.len() < 12 {
+            return Err(ElidError::InvalidHeader);
+        }
+
+        // Bytes 2-3: Original dimensions
+        let original_dims = u16::from_be_bytes([header[2], header[3]]);
+
+        // Byte 4: Precision type
+        let precision = match header[4] {
+            0 => VectorPrecision::Full32,
+            1 => VectorPrecision::Half16,
+            2 => VectorPrecision::Quant8,
+            n if (3..=35).contains(&n) => VectorPrecision::Bits { bits: n - 3 + 1 },
+            _ => {
+                return Err(ElidError::InvalidMetadata(
+                    "Invalid precision type".to_string(),
+                ))
+            }
+        };
+
+        // Byte 5: Dimension mode
+        let dim_mode_type = header[5];
+
+        // Bytes 6-7: Target/common dimensions
+        let target_dims = u16::from_be_bytes([header[6], header[7]]);
+
+        let dimension_mode = match dim_mode_type {
+            0 => DimensionMode::Preserve,
+            1 => DimensionMode::Reduce { target_dims },
+            2 => DimensionMode::Common { dims: target_dims },
+            _ => {
+                return Err(ElidError::InvalidMetadata(
+                    "Invalid dimension mode".to_string(),
+                ))
+            }
+        };
+
+        // Bytes 8-11: Seed (lower 32 bits, extend to u64)
+        let seed_low = u32::from_be_bytes([header[8], header[9], header[10], header[11]]);
+
+        Ok(ProfileInfo {
+            version,
+            profile_type: 0x04,
+            transform_id: None,
+            model_id: None,
+            original_dims: Some(original_dims),
+            precision: Some(precision),
+            dimension_mode: Some(dimension_mode),
+            seed: Some(seed_low as u64),
         })
     }
 
@@ -253,14 +750,68 @@ impl ProfileInfo {
     pub fn to_header(&self) -> Vec<u8> {
         let mut bytes = vec![
             (self.version << 4) | (self.profile_type & 0x0F),
-            0x00, // Reserved
+            0x00, // Reserved / flags
         ];
 
+        // FullVector has extended header
+        if self.profile_type == 0x04 {
+            // Original dimensions (bytes 2-3)
+            let orig_dims = self.original_dims.unwrap_or(0);
+            bytes.extend_from_slice(&orig_dims.to_be_bytes());
+
+            // Precision type (byte 4)
+            let precision_byte = match self.precision {
+                Some(VectorPrecision::Full32) => 0,
+                Some(VectorPrecision::Half16) => 1,
+                Some(VectorPrecision::Quant8) => 2,
+                Some(VectorPrecision::Bits { bits }) => 3 + bits - 1,
+                None => 0,
+            };
+            bytes.push(precision_byte);
+
+            // Dimension mode (byte 5) and target dims (bytes 6-7)
+            let (mode_byte, target_dims) = match self.dimension_mode {
+                Some(DimensionMode::Preserve) => (0u8, 0u16),
+                Some(DimensionMode::Reduce { target_dims }) => (1u8, target_dims),
+                Some(DimensionMode::Common { dims }) => (2u8, dims),
+                None => (0u8, 0u16),
+            };
+            bytes.push(mode_byte);
+            bytes.extend_from_slice(&target_dims.to_be_bytes());
+
+            // Seed lower 32 bits (bytes 8-11)
+            let seed_low = (self.seed.unwrap_or(0) & 0xFFFF_FFFF) as u32;
+            bytes.extend_from_slice(&seed_low.to_be_bytes());
+
+            return bytes;
+        }
+
+        // Non-FullVector: optional transform_id
         if let Some(tid) = self.transform_id {
             bytes.extend_from_slice(&tid.to_be_bytes());
         }
 
         bytes
+    }
+
+    /// Create ProfileInfo from a FullVector profile
+    #[must_use]
+    pub fn from_full_vector(
+        original_dims: u16,
+        precision: VectorPrecision,
+        dimensions: DimensionMode,
+        seed: u64,
+    ) -> Self {
+        ProfileInfo {
+            version: 0,
+            profile_type: 0x04,
+            transform_id: None,
+            model_id: None,
+            original_dims: Some(original_dims),
+            precision: Some(precision),
+            dimension_mode: Some(dimensions),
+            seed: Some(seed),
+        }
     }
 }
 
@@ -586,15 +1137,18 @@ mod tests {
 
     #[test]
     fn test_profile_string_length() {
+        // string_length now includes header bits (16 bits = 2 bytes for non-FullVector)
         let mini = Profile::Mini128 { seed: 0 };
-        assert_eq!(mini.string_length(), 26); // ceil(128/5) = 26
+        // 128 bits payload + 16 bits header = 144 bits -> ceil(144/5) = 29
+        assert_eq!(mini.string_length(), 29);
 
         let morton = Profile::Morton10x10 {
             dims: 10,
             bits_per_dim: 10,
             transform_id: None,
         };
-        assert_eq!(morton.string_length(), 20); // ceil(100/5) = 20
+        // 100 bits payload + 16 bits header = 116 bits -> ceil(116/5) = 24
+        assert_eq!(morton.string_length(), 24);
     }
 
     #[test]
@@ -649,6 +1203,10 @@ mod tests {
             profile_type: 3,
             transform_id: Some(0x1234),
             model_id: None,
+            original_dims: None,
+            precision: None,
+            dimension_mode: None,
+            seed: None,
         };
         let header = info.to_header();
         assert_eq!(header[0], 0x13); // (1 << 4) | 3
@@ -663,6 +1221,10 @@ mod tests {
             profile_type: 1,
             transform_id: Some(42),
             model_id: None,
+            original_dims: None,
+            precision: None,
+            dimension_mode: None,
+            seed: None,
         };
         let header = info.to_header();
         let decoded = ProfileInfo::from_header(&header).unwrap();
@@ -672,8 +1234,41 @@ mod tests {
     }
 
     #[test]
+    fn test_profile_info_full_vector_roundtrip() {
+        let info = ProfileInfo::from_full_vector(
+            768,
+            VectorPrecision::Half16,
+            DimensionMode::Reduce { target_dims: 256 },
+            0x12345678,
+        );
+        let header = info.to_header();
+        assert_eq!(header.len(), 12);
+
+        let decoded = ProfileInfo::from_header(&header).unwrap();
+        assert_eq!(decoded.version, 0);
+        assert_eq!(decoded.profile_type, 0x04);
+        assert_eq!(decoded.original_dims, Some(768));
+        assert_eq!(decoded.precision, Some(VectorPrecision::Half16));
+        assert_eq!(
+            decoded.dimension_mode,
+            Some(DimensionMode::Reduce { target_dims: 256 })
+        );
+        assert_eq!(decoded.seed, Some(0x12345678));
+    }
+
+    #[test]
     fn test_profile_info_invalid_header() {
         let header = vec![0x01]; // Too short
+        assert!(matches!(
+            ProfileInfo::from_header(&header),
+            Err(ElidError::InvalidHeader)
+        ));
+    }
+
+    #[test]
+    fn test_profile_info_full_vector_short_header() {
+        // FullVector (type 0x04) needs 12 bytes
+        let header = vec![0x04, 0x00, 0x00, 0x00]; // Only 4 bytes
         assert!(matches!(
             ProfileInfo::from_header(&header),
             Err(ElidError::InvalidHeader)

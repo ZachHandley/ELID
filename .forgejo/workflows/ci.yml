@@ -43,7 +43,7 @@ jobs:
         run: cargo fmt -- --check
 
       - name: Clippy
-        run: cargo clippy --features ffi,wasm -- -D warnings
+        run: cargo clippy --features ffi,wasm-embeddings -- -D warnings
 
       - name: Save cache
         if: always()
@@ -87,7 +87,7 @@ jobs:
         run: cargo test --test integration_tests
 
       - name: Run FFI tests
-        run: cargo test --features ffi
+        run: cargo test --features ffi,embeddings
 
       - name: Run doc tests
         run: cargo test --doc
@@ -119,10 +119,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y build-essential
 
       - name: Build C library
-        run: cargo build --release --features ffi
+        run: cargo build --release --features ffi,embeddings
 
       - name: Run FFI unit tests
-        run: "cargo test --features ffi ffi::"
+        run: "cargo test --features ffi,embeddings ffi::"
 
       - name: Compile C test
         run: gcc tests/ffi/test-c-ffi.c -I. -L${CARGO_TARGET_DIR:-./target}/release -lelid -o test-c-ffi-bin
@@ -180,7 +180,7 @@ jobs:
           python-version: '3.12'
 
       - name: Build Python wheel
-        run: uv run maturin build --release --features python --out dist
+        run: uv run maturin build --release --features python-embeddings --out dist
 
       - name: Install wheel
         run: uv pip install dist/elid-*.whl

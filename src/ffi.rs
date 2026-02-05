@@ -283,6 +283,306 @@ pub extern "C" fn elid_version() -> *const c_char {
     }
 }
 
+// ============================================================================
+// Embedding FFI Bindings (feature = "embeddings")
+// ============================================================================
+
+#[cfg(feature = "embeddings")]
+mod embeddings_ffi {
+    use super::*;
+    use crate::embeddings::{decode_to_embedding, encode, hamming_distance, is_reversible, Profile};
+
+    /// Encode an embedding vector using the lossless profile.
+    ///
+    /// Creates an ELID string that can be decoded back to the original embedding
+    /// with full 32-bit precision.
+    ///
+    /// # Safety
+    ///
+    /// - `embedding` must be a valid pointer to an array of `len` f32 values.
+    /// - `len` must be between 64 and 2048 (inclusive).
+    /// - The returned string must be freed with `elid_free_string()`.
+    ///
+    /// Returns NULL on error (invalid dimensions, invalid values, encoding failure).
+    #[no_mangle]
+    pub unsafe extern "C" fn elid_encode_lossless(
+        embedding: *const f32,
+        len: usize,
+    ) -> *mut c_char {
+        if embedding.is_null() || !(64..=2048).contains(&len) {
+            return std::ptr::null_mut();
+        }
+
+        let slice = std::slice::from_raw_parts(embedding, len);
+        let profile = Profile::lossless();
+
+        match encode(slice, &profile) {
+            Ok(elid) => match CString::new(elid.as_str()) {
+                Ok(cs) => cs.into_raw(),
+                Err(_) => std::ptr::null_mut(),
+            },
+            Err(_) => std::ptr::null_mut(),
+        }
+    }
+
+    /// Encode an embedding vector with compression based on retention percentage.
+    ///
+    /// The retention percentage (0.0-1.0) controls how much information is preserved:
+    /// - 1.0 = lossless (Full32 precision, all dimensions)
+    /// - 0.5 = half precision and/or half dimensions
+    /// - 0.25 = quarter precision and/or quarter dimensions
+    ///
+    /// # Safety
+    ///
+    /// - `embedding` must be a valid pointer to an array of `len` f32 values.
+    /// - `len` must be between 64 and 2048 (inclusive).
+    /// - `retention_pct` must be between 0.0 and 1.0.
+    /// - The returned string must be freed with `elid_free_string()`.
+    ///
+    /// Returns NULL on error.
+    #[no_mangle]
+    pub unsafe extern "C" fn elid_encode_compressed(
+        embedding: *const f32,
+        len: usize,
+        retention_pct: f32,
+    ) -> *mut c_char {
+        if embedding.is_null() || !(64..=2048).contains(&len) {
+            return std::ptr::null_mut();
+        }
+
+        let slice = std::slice::from_raw_parts(embedding, len);
+        let profile = Profile::compressed(retention_pct, len as u16);
+
+        match encode(slice, &profile) {
+            Ok(elid) => match CString::new(elid.as_str()) {
+                Ok(cs) => cs.into_raw(),
+                Err(_) => std::ptr::null_mut(),
+            },
+            Err(_) => std::ptr::null_mut(),
+        }
+    }
+
+    /// Encode an embedding vector with a maximum output string length constraint.
+    ///
+    /// Calculates the optimal precision and dimension settings to fit within
+    /// the specified character limit while maximizing fidelity.
+    ///
+    /// # Safety
+    ///
+    /// - `embedding` must be a valid pointer to an array of `len` f32 values.
+    /// - `len` must be between 64 and 2048 (inclusive).
+    /// - `max_chars` should be at least 20 (header overhead).
+    /// - The returned string must be freed with `elid_free_string()`.
+    ///
+    /// Returns NULL on error.
+    #[no_mangle]
+    pub unsafe extern "C" fn elid_encode_max_length(
+        embedding: *const f32,
+        len: usize,
+        max_chars: usize,
+    ) -> *mut c_char {
+        if embedding.is_null() || !(64..=2048).contains(&len) {
+            return std::ptr::null_mut();
+        }
+
+        let slice = std::slice::from_raw_parts(embedding, len);
+        let profile = Profile::max_length(max_chars, len as u16);
+
+        match encode(slice, &profile) {
+            Ok(elid) => match CString::new(elid.as_str()) {
+                Ok(cs) => cs.into_raw(),
+                Err(_) => std::ptr::null_mut(),
+            },
+            Err(_) => std::ptr::null_mut(),
+        }
+    }
+
+    /// Encode an embedding vector for cross-dimensional comparison.
+    ///
+    /// Projects the embedding to a common dimension space, allowing comparison
+    /// between embeddings of different original dimensions (e.g., 256d vs 768d).
+    ///
+    /// # Safety
+    ///
+    /// - `embedding` must be a valid pointer to an array of `len` f32 values.
+    /// - `len` must be between 64 and 2048 (inclusive).
+    /// - `common_dims` is the target dimension space (vectors will be projected here).
+    /// - The returned string must be freed with `elid_free_string()`.
+    ///
+    /// Returns NULL on error.
+    #[no_mangle]
+    pub unsafe extern "C" fn elid_encode_cross_dimensional(
+        embedding: *const f32,
+        len: usize,
+        common_dims: u16,
+    ) -> *mut c_char {
+        if embedding.is_null() || !(64..=2048).contains(&len) {
+            return std::ptr::null_mut();
+        }
+
+        let slice = std::slice::from_raw_parts(embedding, len);
+        let profile = Profile::cross_dimensional(common_dims);
+
+        match encode(slice, &profile) {
+            Ok(elid) => match CString::new(elid.as_str()) {
+                Ok(cs) => cs.into_raw(),
+                Err(_) => std::ptr::null_mut(),
+            },
+            Err(_) => std::ptr::null_mut(),
+        }
+    }
+
+    /// Decode an ELID string back to an embedding vector.
+    ///
+    /// Only works for ELIDs encoded with FullVector profiles (lossless, compressed,
+    /// max_length, or cross_dimensional). Other profiles use lossy hashing that
+    /// cannot be reversed.
+    ///
+    /// # Safety
+    ///
+    /// - `elid` must be a valid, null-terminated UTF-8 string.
+    /// - `out_len` must be a valid pointer where the array length will be written.
+    /// - The returned array must be freed with `elid_free_embedding()`.
+    ///
+    /// Returns NULL on error (invalid ELID, non-reversible profile, decoding failure).
+    /// On success, `*out_len` will contain the number of f32 elements in the returned array.
+    #[no_mangle]
+    pub unsafe extern "C" fn elid_decode_to_embedding(
+        elid: *const c_char,
+        out_len: *mut usize,
+    ) -> *mut f32 {
+        if elid.is_null() || out_len.is_null() {
+            return std::ptr::null_mut();
+        }
+
+        let elid_str = match c_str_to_rust(elid) {
+            Some(s) => s,
+            None => return std::ptr::null_mut(),
+        };
+
+        // Create Elid from string
+        let elid_obj = match crate::embeddings::Elid::from_string(elid_str.to_string()) {
+            Ok(e) => e,
+            Err(_) => return std::ptr::null_mut(),
+        };
+
+        // Decode to embedding
+        match decode_to_embedding(&elid_obj) {
+            Ok((embedding, _metadata)) => {
+                let len = embedding.len();
+                let mut boxed = embedding.into_boxed_slice();
+                let ptr = boxed.as_mut_ptr();
+                std::mem::forget(boxed);
+                *out_len = len;
+                ptr
+            }
+            Err(_) => std::ptr::null_mut(),
+        }
+    }
+
+    /// Check if an ELID can be decoded back to an embedding.
+    ///
+    /// Returns 1 if the ELID was encoded with a FullVector profile (reversible),
+    /// 0 if not reversible, or -1 on error (NULL pointer, invalid ELID).
+    ///
+    /// # Safety
+    ///
+    /// `elid` must be a valid, null-terminated UTF-8 string, or NULL.
+    #[no_mangle]
+    pub unsafe extern "C" fn elid_is_reversible(elid: *const c_char) -> i32 {
+        if elid.is_null() {
+            return -1;
+        }
+
+        let elid_str = match c_str_to_rust(elid) {
+            Some(s) => s,
+            None => return -1,
+        };
+
+        // Create Elid from string
+        let elid_obj = match crate::embeddings::Elid::from_string(elid_str.to_string()) {
+            Ok(e) => e,
+            Err(_) => return -1,
+        };
+
+        if is_reversible(&elid_obj) {
+            1
+        } else {
+            0
+        }
+    }
+
+    /// Compute the Hamming distance between two Mini128 ELIDs.
+    ///
+    /// Returns the number of differing bits in the SimHash payloads of two ELIDs.
+    /// This distance is proportional to the angular distance between the original
+    /// embeddings.
+    ///
+    /// Both ELIDs must use the Mini128 profile.
+    ///
+    /// # Safety
+    ///
+    /// Both `elid1` and `elid2` must be valid, null-terminated UTF-8 strings.
+    ///
+    /// Returns -1 on error (NULL pointers, invalid ELIDs, profile mismatch).
+    /// On success, returns the Hamming distance (0-128).
+    #[no_mangle]
+    pub unsafe extern "C" fn elid_embedding_hamming_distance(
+        elid1: *const c_char,
+        elid2: *const c_char,
+    ) -> i32 {
+        if elid1.is_null() || elid2.is_null() {
+            return -1;
+        }
+
+        let elid1_str = match c_str_to_rust(elid1) {
+            Some(s) => s,
+            None => return -1,
+        };
+
+        let elid2_str = match c_str_to_rust(elid2) {
+            Some(s) => s,
+            None => return -1,
+        };
+
+        // Create Elid objects
+        let elid1_obj = match crate::embeddings::Elid::from_string(elid1_str.to_string()) {
+            Ok(e) => e,
+            Err(_) => return -1,
+        };
+
+        let elid2_obj = match crate::embeddings::Elid::from_string(elid2_str.to_string()) {
+            Ok(e) => e,
+            Err(_) => return -1,
+        };
+
+        // Compute Hamming distance
+        match hamming_distance(&elid1_obj, &elid2_obj) {
+            Ok(dist) => dist as i32,
+            Err(_) => -1,
+        }
+    }
+
+    /// Free an embedding array allocated by `elid_decode_to_embedding()`.
+    ///
+    /// # Safety
+    ///
+    /// - `ptr` must be a pointer previously returned by `elid_decode_to_embedding()`, or NULL.
+    /// - `len` must be the length that was written to `out_len` by `elid_decode_to_embedding()`.
+    /// - Do not call this function twice on the same pointer.
+    /// - Do not use the pointer after freeing.
+    #[no_mangle]
+    pub unsafe extern "C" fn elid_free_embedding(ptr: *mut f32, len: usize) {
+        if !ptr.is_null() && len > 0 {
+            drop(Vec::from_raw_parts(ptr, len, len));
+        }
+    }
+}
+
+// Re-export embedding FFI functions at module level
+#[cfg(feature = "embeddings")]
+pub use embeddings_ffi::*;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -354,6 +654,172 @@ mod tests {
             assert_eq!(elid_normalized_levenshtein(ptr::null(), ptr::null()), 0.0);
             assert_eq!(elid_jaro(ptr::null(), ptr::null()), 0.0);
             assert_eq!(elid_hamming(ptr::null(), ptr::null()), -1);
+        }
+    }
+}
+
+#[cfg(all(test, feature = "embeddings"))]
+mod embeddings_tests {
+    use super::*;
+    use std::ffi::CString;
+    use std::ptr;
+
+    #[test]
+    fn test_ffi_encode_lossless() {
+        let embedding: Vec<f32> = (0..128).map(|i| (i as f32 / 64.0) - 1.0).collect();
+        unsafe {
+            let elid = elid_encode_lossless(embedding.as_ptr(), embedding.len());
+            assert!(!elid.is_null(), "Should encode successfully");
+
+            // Clean up
+            elid_free_string(elid);
+        }
+    }
+
+    #[test]
+    fn test_ffi_encode_lossless_null() {
+        unsafe {
+            let elid = elid_encode_lossless(ptr::null(), 128);
+            assert!(elid.is_null(), "Should return NULL for null input");
+        }
+    }
+
+    #[test]
+    fn test_ffi_encode_lossless_invalid_len() {
+        let embedding: Vec<f32> = vec![0.1; 32]; // Too small
+        unsafe {
+            let elid = elid_encode_lossless(embedding.as_ptr(), embedding.len());
+            assert!(elid.is_null(), "Should return NULL for invalid length");
+        }
+    }
+
+    #[test]
+    fn test_ffi_encode_compressed() {
+        let embedding: Vec<f32> = (0..768).map(|i| (i as f32 / 384.0) - 1.0).collect();
+        unsafe {
+            let elid = elid_encode_compressed(embedding.as_ptr(), embedding.len(), 0.5);
+            assert!(!elid.is_null(), "Should encode successfully");
+            elid_free_string(elid);
+        }
+    }
+
+    #[test]
+    fn test_ffi_encode_max_length() {
+        let embedding: Vec<f32> = (0..768).map(|i| (i as f32 / 384.0) - 1.0).collect();
+        let max_chars = 100;
+        unsafe {
+            let elid = elid_encode_max_length(embedding.as_ptr(), embedding.len(), max_chars);
+            assert!(!elid.is_null(), "Should encode successfully");
+
+            // Verify length constraint
+            let elid_str = CStr::from_ptr(elid).to_str().unwrap();
+            assert!(
+                elid_str.len() <= max_chars,
+                "ELID length {} exceeds max {}",
+                elid_str.len(),
+                max_chars
+            );
+
+            elid_free_string(elid);
+        }
+    }
+
+    #[test]
+    fn test_ffi_encode_cross_dimensional() {
+        let embedding: Vec<f32> = (0..768).map(|i| (i as f32 / 384.0) - 1.0).collect();
+        unsafe {
+            let elid = elid_encode_cross_dimensional(embedding.as_ptr(), embedding.len(), 128);
+            assert!(!elid.is_null(), "Should encode successfully");
+            elid_free_string(elid);
+        }
+    }
+
+    #[test]
+    fn test_ffi_encode_decode_roundtrip() {
+        let embedding: Vec<f32> = (0..128).map(|i| (i as f32 / 64.0) - 1.0).collect();
+        unsafe {
+            // Encode
+            let elid = elid_encode_lossless(embedding.as_ptr(), embedding.len());
+            assert!(!elid.is_null());
+
+            // Check reversibility
+            let is_rev = elid_is_reversible(elid);
+            assert_eq!(is_rev, 1, "Lossless encoding should be reversible");
+
+            // Decode
+            let mut out_len: usize = 0;
+            let decoded = elid_decode_to_embedding(elid, &mut out_len);
+            assert!(!decoded.is_null(), "Should decode successfully");
+            assert_eq!(out_len, embedding.len());
+
+            // Verify values match
+            let decoded_slice = std::slice::from_raw_parts(decoded, out_len);
+            for (i, (&orig, &dec)) in embedding.iter().zip(decoded_slice.iter()).enumerate() {
+                assert_eq!(orig, dec, "Mismatch at index {}: {} vs {}", i, orig, dec);
+            }
+
+            // Clean up
+            elid_free_embedding(decoded, out_len);
+            elid_free_string(elid);
+        }
+    }
+
+    #[test]
+    fn test_ffi_decode_null_safety() {
+        unsafe {
+            let mut out_len: usize = 0;
+
+            // NULL elid
+            let result = elid_decode_to_embedding(ptr::null(), &mut out_len);
+            assert!(result.is_null());
+
+            // NULL out_len
+            let elid = CString::new("invalid").unwrap();
+            let result = elid_decode_to_embedding(elid.as_ptr(), ptr::null_mut());
+            assert!(result.is_null());
+        }
+    }
+
+    #[test]
+    fn test_ffi_is_reversible_null() {
+        unsafe {
+            let result = elid_is_reversible(ptr::null());
+            assert_eq!(result, -1, "Should return -1 for NULL");
+        }
+    }
+
+    #[test]
+    fn test_ffi_is_reversible_invalid() {
+        let invalid = CString::new("xyz_invalid").unwrap();
+        unsafe {
+            let result = elid_is_reversible(invalid.as_ptr());
+            assert_eq!(result, -1, "Should return -1 for invalid ELID");
+        }
+    }
+
+    #[test]
+    fn test_ffi_embedding_hamming_distance_null() {
+        unsafe {
+            assert_eq!(elid_embedding_hamming_distance(ptr::null(), ptr::null()), -1);
+
+            let valid = CString::new("test").unwrap();
+            assert_eq!(
+                elid_embedding_hamming_distance(valid.as_ptr(), ptr::null()),
+                -1
+            );
+            assert_eq!(
+                elid_embedding_hamming_distance(ptr::null(), valid.as_ptr()),
+                -1
+            );
+        }
+    }
+
+    #[test]
+    fn test_ffi_free_embedding_null() {
+        unsafe {
+            // Should not crash
+            elid_free_embedding(ptr::null_mut(), 0);
+            elid_free_embedding(ptr::null_mut(), 100);
         }
     }
 }

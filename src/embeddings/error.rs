@@ -42,4 +42,29 @@ pub enum ElidError {
     /// Transform ID not found in profile configuration
     #[error("Transform not found: ID {0}")]
     TransformNotFound(u16),
+
+    /// Profile does not support decoding back to embedding
+    #[error("Decoding not supported for this profile type")]
+    DecodingNotSupported,
+
+    /// Invalid precision setting
+    #[error("Invalid precision: {0}")]
+    InvalidPrecision(String),
+
+    /// Dimension projection error
+    #[error("Projection error: {0}")]
+    ProjectionError(String),
+
+    /// Insufficient data in encoded payload
+    #[error("Insufficient data: expected {expected} bytes, got {got}")]
+    InsufficientData {
+        /// Expected number of bytes
+        expected: usize,
+        /// Actual number of bytes found
+        got: usize,
+    },
+
+    /// Invalid metadata in header
+    #[error("Invalid metadata in header: {0}")]
+    InvalidMetadata(String),
 }
