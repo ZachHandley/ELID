@@ -762,8 +762,8 @@ pub fn decode_elid_to_embedding(elid_str: String) -> Result<JsValue, JsValue> {
     }
 
     // Decode to embedding
-    let (values, _metadata) = embeddings::decode_to_embedding(&elid)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let (values, _metadata) =
+        embeddings::decode_to_embedding(&elid).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     // Convert to Float64Array for JavaScript
     let f64_values: Vec<f64> = values.iter().map(|&x| x as f64).collect();
@@ -898,8 +898,8 @@ pub fn get_elid_metadata(elid_str: String) -> Result<JsValue, JsValue> {
     }
 
     // Decode to get metadata
-    let (_values, metadata) = embeddings::decode_to_embedding(&elid)
-        .map_err(|e| JsValue::from_str(&e.to_string()))?;
+    let (_values, metadata) =
+        embeddings::decode_to_embedding(&elid).map_err(|e| JsValue::from_str(&e.to_string()))?;
 
     // Build result object
     let result = Object::new();
@@ -939,7 +939,12 @@ pub fn get_elid_metadata(elid_str: String) -> Result<JsValue, JsValue> {
             "Bits"
         }
     };
-    Reflect::set(&result, &"precision".into(), &JsValue::from_str(precision_str)).unwrap();
+    Reflect::set(
+        &result,
+        &"precision".into(),
+        &JsValue::from_str(precision_str),
+    )
+    .unwrap();
 
     // Dimension mode as string
     let mode_str = match metadata.dimension_mode {

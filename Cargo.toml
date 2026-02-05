@@ -25,11 +25,6 @@ embeddings = [                # Vector encoding (now included by default)
 wasm = ["strings", "embeddings", "dep:wasm-bindgen", "dep:js-sys", "dep:serde", "dep:serde-wasm-bindgen", "dep:serde_json", "dep:getrandom"]
 python = ["strings", "embeddings", "dep:pyo3", "dep:numpy", "dep:rayon"]
 ffi = ["strings", "embeddings"]
-# Minimal builds without embeddings (smaller binary, zero deps for strings)
-strings-only = ["strings"]
-wasm-strings-only = ["strings", "dep:wasm-bindgen", "dep:js-sys", "dep:serde", "dep:serde-wasm-bindgen", "dep:serde_json"]
-python-strings-only = ["strings", "dep:pyo3"]
-ffi-strings-only = ["strings"]
 
 [dependencies]
 # No external dependencies for core algorithms - pure Rust implementation

@@ -290,7 +290,9 @@ pub extern "C" fn elid_version() -> *const c_char {
 #[cfg(feature = "embeddings")]
 mod embeddings_ffi {
     use super::*;
-    use crate::embeddings::{decode_to_embedding, encode, hamming_distance, is_reversible, Profile};
+    use crate::embeddings::{
+        decode_to_embedding, encode, hamming_distance, is_reversible, Profile,
+    };
 
     /// Encode an embedding vector using the lossless profile.
     ///
@@ -800,7 +802,10 @@ mod embeddings_tests {
     #[test]
     fn test_ffi_embedding_hamming_distance_null() {
         unsafe {
-            assert_eq!(elid_embedding_hamming_distance(ptr::null(), ptr::null()), -1);
+            assert_eq!(
+                elid_embedding_hamming_distance(ptr::null(), ptr::null()),
+                -1
+            );
 
             let valid = CString::new("test").unwrap();
             assert_eq!(

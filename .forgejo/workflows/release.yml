@@ -38,7 +38,7 @@ jobs:
           components: clippy
 
       - name: Run tests
-        run: cargo test --features ffi,wasm-embeddings
+        run: cargo test --features ffi,wasm
 
       - name: Build release
         run: cargo build --release
@@ -113,7 +113,7 @@ jobs:
           python-version: '3.12'
 
       - name: Build wheel
-        run: uv run maturin build --release --features python-embeddings --out dist
+        run: uv run maturin build --release --features python --out dist
 
       - name: Upload Python wheel
         uses: https://github.com/christopherhx/gitea-upload-artifact@v4

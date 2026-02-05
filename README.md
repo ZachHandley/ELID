@@ -193,11 +193,9 @@ let distance = levenshtein_with_opts("  HELLO  ", "hello", &opts); // 0
 | Feature | Description | Dependencies |
 |---------|-------------|--------------|
 | `strings` | String similarity algorithms (default) | None |
-| `embeddings` | Embedding encoding (Mini128, Morton, Hilbert) | rand, blake3, etc. |
-| `wasm` | WebAssembly bindings | wasm-bindgen, js-sys |
-| `wasm-embeddings` | WASM + embedding support | wasm + embeddings deps |
-| `python` | Python bindings via PyO3 | pyo3 |
-| `python-embeddings` | Python + embedding support | python + embeddings + numpy |
+| `embeddings` | Embedding encoding (default) | rand, blake3, etc. |
+| `wasm` | WebAssembly bindings (includes embeddings) | wasm-bindgen, js-sys, getrandom |
+| `python` | Python bindings via PyO3 (includes embeddings) | pyo3, numpy, rayon |
 | `ffi` | C FFI bindings | None (enables unsafe) |
 
 ## Performance

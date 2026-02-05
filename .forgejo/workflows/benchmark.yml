@@ -82,7 +82,7 @@ jobs:
           size_kb=$((size / 1024))
           echo "WASM size: ${size_kb} KB"
 
-          max_size_kb=150
+          max_size_kb=300
           if [ $size_kb -gt $max_size_kb ]; then
             echo "FAILED: WASM is ${size_kb}KB > ${max_size_kb}KB"
             exit 1

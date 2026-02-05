@@ -28,9 +28,9 @@
 //! ## Feature Flags
 //!
 //! - `strings` (default): Zero-dependency string similarity algorithms
-//! - `embeddings`: Vector encoding with Mini128, Morton, and Hilbert profiles
-//! - `wasm` / `wasm-embeddings`: WebAssembly bindings
-//! - `python` / `python-embeddings`: Python bindings via PyO3
+//! - `embeddings` (default): Vector encoding with Mini128, Morton, and Hilbert profiles
+//! - `wasm`: WebAssembly bindings (includes embeddings)
+//! - `python`: Python bindings via PyO3 (includes embeddings + numpy)
 //! - `ffi`: C FFI bindings
 //!
 //! ## Embedding Encoding Example

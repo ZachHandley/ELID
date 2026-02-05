@@ -33,7 +33,7 @@ Repository = "https://github.com/ZachHandley/ELID"
 Issues = "https://github.com/ZachHandley/ELID/issues"
 
 [tool.maturin]
-features = ["python-embeddings"]
+features = ["python"]
 module-name = "elid"
 include = [
     { path = "elid.pyi", format = "wheel" },

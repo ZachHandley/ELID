@@ -747,7 +747,10 @@ fn encode_max_length(embedding: PyReadonlyArray1<f32>, max_chars: usize) -> PyRe
 ///     >>> np.allclose(embedding, recovered)  # True
 #[cfg(feature = "embeddings")]
 #[pyfunction]
-fn decode_to_embedding<'py>(py: Python<'py>, elid_str: &str) -> PyResult<Option<Bound<'py, PyArray1<f32>>>> {
+fn decode_to_embedding<'py>(
+    py: Python<'py>,
+    elid_str: &str,
+) -> PyResult<Option<Bound<'py, PyArray1<f32>>>> {
     let elid = embeddings::types::Elid::from_string(elid_str.to_string())
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
 
@@ -832,7 +835,10 @@ fn is_reversible(elid_str: &str) -> PyResult<bool> {
 ///     >>> dec1.shape == dec2.shape  # True (both 128,)
 #[cfg(feature = "embeddings")]
 #[pyfunction]
-fn encode_cross_dimensional(embedding: PyReadonlyArray1<f32>, common_dims: u16) -> PyResult<String> {
+fn encode_cross_dimensional(
+    embedding: PyReadonlyArray1<f32>,
+    common_dims: u16,
+) -> PyResult<String> {
     let slice = embedding.as_slice()?;
     let profile = EmbedProfile::cross_dimensional(common_dims);
 
@@ -890,7 +896,10 @@ fn get_metadata(elid_str: &str, py: Python<'_>) -> PyResult<Option<Py<pyo3::PyAn
     dict.set_item("original_dims", metadata.original_dims)?;
     dict.set_item("encoded_dims", metadata.encoded_dims)?;
     dict.set_item("is_lossless", metadata.is_lossless())?;
-    dict.set_item("has_dimension_reduction", metadata.has_dimension_reduction())?;
+    dict.set_item(
+        "has_dimension_reduction",
+        metadata.has_dimension_reduction(),
+    )?;
 
     // Precision as string
     let precision_str = match metadata.precision {
