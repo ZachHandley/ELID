@@ -34,8 +34,8 @@ pub use types::{
     DimensionMode, Elid, Embedding, Profile, ProfileInfo, QuantizedCoords, VectorPrecision,
 };
 pub use vector_simhash::{
-    cosine_similarity_approx, elid_hamming_distance, simhash_128, simhash_from_bytes,
-    simhash_to_bytes,
+    cosine_similarity_approx, elid_hamming_distance, embedding_to_bands, mini128_to_bands,
+    simhash_128, simhash_from_bytes, simhash_to_bytes,
 };
 
 // Re-export curve functions

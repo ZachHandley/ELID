@@ -858,6 +858,109 @@ pub fn encode_elid_cross_dimensional(
         .map_err(|e| JsValue::from_str(&e.to_string()))
 }
 
+/// Convert an embedding vector directly to LSH bands.
+///
+/// Computes the 128-bit SimHash of the embedding and splits it into bands
+/// for Locality-Sensitive Hashing (LSH) indexing in databases.
+///
+/// # Parameters
+///
+/// - `embedding`: Float64 array of embedding values (64-2048 dimensions)
+/// - `num_bands`: Number of bands to split into (must be 1, 2, 4, 8, or 16)
+/// - `seed`: Optional seed for deterministic hashing (defaults to standard ELID seed)
+///
+/// # Returns
+///
+/// An array of base32hex-encoded band strings. Returns an empty array if
+/// `num_bands` is invalid.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { embeddingToBands } from 'elid';
+///
+/// const embedding = new Float64Array(768).fill(0.1);
+///
+/// // Split into 4 bands (32 bits each) - good balance for most use cases
+/// const bands = embeddingToBands(embedding, 4);
+/// console.log(bands.length); // 4
+///
+/// // Store bands in database for efficient OR queries:
+/// // SELECT * FROM embeddings WHERE band0 = ? OR band1 = ? OR band2 = ? OR band3 = ?
+///
+/// // Use custom seed for different hash family
+/// const bandsWithSeed = embeddingToBands(embedding, 4, 12345n);
+/// ```
+#[cfg(feature = "embeddings")]
+#[wasm_bindgen(js_name = embeddingToBands)]
+pub fn embedding_to_bands_wasm(
+    embedding: &[f64],
+    num_bands: u8,
+    seed: Option<u64>,
+) -> Vec<String> {
+    // Convert f64 to f32 (JS uses f64 for all numbers)
+    let embedding_f32: Vec<f32> = embedding.iter().map(|&x| x as f32).collect();
+
+    // Use default seed if not provided (same as Mini128 default: "ELIDSIMH")
+    let seed_value = seed.unwrap_or(0x454c4944_53494d48);
+
+    embeddings::embedding_to_bands(&embedding_f32, num_bands, seed_value)
+}
+
+/// Split an existing Mini128 hash into LSH bands.
+///
+/// Takes a 128-bit hash (16 bytes) and splits it into bands for
+/// Locality-Sensitive Hashing (LSH) indexing.
+///
+/// # Parameters
+///
+/// - `hash`: Uint8Array containing exactly 16 bytes (128-bit hash)
+/// - `num_bands`: Number of bands to split into (must be 1, 2, 4, 8, or 16)
+///
+/// # Returns
+///
+/// An array of base32hex-encoded band strings.
+///
+/// # Throws
+///
+/// Throws an error if the hash is not exactly 16 bytes.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// import { mini128ToBands, encodeElid, decodeElid, ElidProfile } from 'elid';
+///
+/// // Get hash bytes from an existing Mini128 ELID
+/// const embedding = new Float64Array(768).fill(0.1);
+/// const elid = encodeElid(embedding, ElidProfile.Mini128);
+/// const bytes = decodeElid(elid);
+///
+/// // Extract the 16-byte hash (skip header byte)
+/// const hashBytes = bytes.slice(1, 17);
+///
+/// // Split into bands
+/// const bands = mini128ToBands(hashBytes, 4);
+/// console.log(bands.length); // 4
+/// ```
+#[cfg(feature = "embeddings")]
+#[wasm_bindgen(js_name = mini128ToBands)]
+pub fn mini128_to_bands_wasm(hash: &[u8], num_bands: u8) -> Result<Vec<String>, JsValue> {
+    // Validate hash is exactly 16 bytes
+    if hash.len() != 16 {
+        return Err(JsValue::from_str(&format!(
+            "Hash must be exactly 16 bytes, got {} bytes",
+            hash.len()
+        )));
+    }
+
+    // Convert slice to fixed-size array
+    let hash_array: [u8; 16] = hash.try_into().map_err(|_| {
+        JsValue::from_str("Failed to convert hash to 16-byte array")
+    })?;
+
+    Ok(embeddings::mini128_to_bands(&hash_array, num_bands))
+}
+
 /// Get metadata about a FullVector ELID.
 ///
 /// Returns an object containing information about how the ELID was encoded,

@@ -52,6 +52,7 @@ use rand::SeedableRng;
 use rand_chacha::ChaCha20Rng;
 use rand_distr::{Distribution, StandardNormal};
 
+use super::encoding::encode_sortable;
 use super::error::ElidError;
 
 /// Derive a unique 32-byte seed for a specific bit position
@@ -261,6 +262,164 @@ pub fn simhash_from_bytes(bytes: &[u8]) -> Result<u128, ElidError> {
 pub fn cosine_similarity_approx(hash_a: u128, hash_b: u128) -> f32 {
     let distance = elid_hamming_distance(hash_a, hash_b) as f32;
     1.0 - (distance / 128.0) * std::f32::consts::PI
+}
+
+// ============================================================================
+// LSH Band Generation
+// ============================================================================
+
+/// Split a 128-bit Mini128 SimHash into bands for LSH (Locality-Sensitive Hashing)
+///
+/// This function divides the 128-bit hash into `num_bands` equal parts and encodes
+/// each part as a base32hex string. Band matching is used for efficient approximate
+/// nearest neighbor search: if two hashes share at least one identical band, they
+/// are likely similar.
+///
+/// # Algorithm
+///
+/// 1. Divide 128 bits into `num_bands` equal chunks
+/// 2. Extract each chunk as a byte slice from the big-endian representation
+/// 3. Encode each chunk as lowercase base32hex (0-9, a-v)
+///
+/// # Parameters
+///
+/// - `hash`: 16-byte array representing a 128-bit SimHash (big-endian)
+/// - `num_bands`: Number of bands to split into (must be 1, 2, 4, 8, or 16)
+///
+/// # Returns
+///
+/// A vector of base32hex-encoded band strings. Returns an empty vector if
+/// `num_bands` is invalid (doesn't evenly divide 128 bits / 16 bytes).
+///
+/// # Band Sizes
+///
+/// | num_bands | bits/band | bytes/band | chars/band |
+/// |-----------|-----------|------------|------------|
+/// | 1         | 128       | 16         | 26         |
+/// | 2         | 64        | 8          | 13         |
+/// | 4         | 32        | 4          | 7          |
+/// | 8         | 16        | 2          | 4          |
+/// | 16        | 8         | 1          | 2          |
+///
+/// # Example
+///
+/// ```rust
+/// use elid::embeddings::vector_simhash::{simhash_128, simhash_to_bytes, mini128_to_bands};
+///
+/// // Generate a SimHash from an embedding
+/// let embedding = vec![0.1f32; 768];
+/// let hash = simhash_128(&embedding, 0x454c4944_53494d48);
+/// let hash_bytes = simhash_to_bytes(hash);
+///
+/// // Split into 4 bands (32 bits each)
+/// let bands = mini128_to_bands(&hash_bytes, 4);
+/// assert_eq!(bands.len(), 4);
+///
+/// // Each band is 7 base32hex characters (32 bits = 4 bytes = 7 chars)
+/// for band in &bands {
+///     assert_eq!(band.len(), 7);
+/// }
+/// ```
+///
+/// # Database Usage
+///
+/// Store each band in an indexed column for efficient querying:
+/// ```sql
+/// CREATE INDEX idx_band0 ON embeddings(band0);
+/// CREATE INDEX idx_band1 ON embeddings(band1);
+/// -- etc.
+///
+/// -- Query for similar embeddings (OR across bands)
+/// SELECT * FROM embeddings
+/// WHERE band0 = ? OR band1 = ? OR band2 = ? OR band3 = ?;
+/// ```
+#[must_use]
+pub fn mini128_to_bands(hash: &[u8; 16], num_bands: u8) -> Vec<String> {
+    // Validate num_bands: must evenly divide 16 bytes
+    // Valid values: 1, 2, 4, 8, 16
+    if num_bands == 0 || 16 % num_bands != 0 {
+        return Vec::new();
+    }
+
+    let bytes_per_band = 16 / num_bands as usize;
+    let mut bands = Vec::with_capacity(num_bands as usize);
+
+    for i in 0..num_bands as usize {
+        let start = i * bytes_per_band;
+        let end = start + bytes_per_band;
+        let band_bytes = &hash[start..end];
+        bands.push(encode_sortable(band_bytes));
+    }
+
+    bands
+}
+
+/// Generate LSH bands directly from an embedding vector
+///
+/// This is a convenience function that combines `simhash_128` and `mini128_to_bands`.
+/// It computes the 128-bit SimHash of the embedding and splits it into bands in
+/// a single call.
+///
+/// # Parameters
+///
+/// - `embedding`: Input vector (f32 slice, typically 64-2048 dimensions)
+/// - `num_bands`: Number of bands to split into (must be 1, 2, 4, 8, or 16)
+/// - `seed`: Master seed for deterministic hashing (use consistent seed across all embeddings)
+///
+/// # Returns
+///
+/// A vector of base32hex-encoded band strings. Returns an empty vector if
+/// `num_bands` is invalid.
+///
+/// # Example
+///
+/// ```rust
+/// use elid::embeddings::vector_simhash::embedding_to_bands;
+///
+/// let embedding = vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+///     .into_iter()
+///     .cycle()
+///     .take(768)
+///     .collect::<Vec<f32>>();
+///
+/// let seed = 0x454c4944_53494d48; // Use consistent seed
+/// let bands = embedding_to_bands(&embedding, 4, seed);
+///
+/// assert_eq!(bands.len(), 4);
+/// println!("Band 0: {}", bands[0]);
+/// println!("Band 1: {}", bands[1]);
+/// println!("Band 2: {}", bands[2]);
+/// println!("Band 3: {}", bands[3]);
+/// ```
+///
+/// # LSH Theory
+///
+/// With `b` bands of `r` bits each (where b * r = 128):
+/// - Probability two embeddings with Hamming distance `d` share a band:
+///   `1 - (1 - (1 - d/128)^r)^b`
+///
+/// Higher `num_bands` (more bands, fewer bits each):
+/// - More likely to find matches (higher recall)
+/// - More false positives (lower precision)
+///
+/// Lower `num_bands` (fewer bands, more bits each):
+/// - Fewer false positives (higher precision)
+/// - May miss some similar embeddings (lower recall)
+///
+/// Common choices:
+/// - 4 bands (32 bits each): Good balance for most use cases
+/// - 8 bands (16 bits each): Higher recall, more candidates to re-rank
+/// - 2 bands (64 bits each): Higher precision, fewer candidates
+#[must_use]
+pub fn embedding_to_bands(embedding: &[f32], num_bands: u8, seed: u64) -> Vec<String> {
+    // Validate num_bands early to avoid unnecessary SimHash computation
+    if num_bands == 0 || 16 % num_bands != 0 {
+        return Vec::new();
+    }
+
+    let hash = simhash_128(embedding, seed);
+    let hash_bytes = simhash_to_bytes(hash);
+    mini128_to_bands(&hash_bytes, num_bands)
 }
 
 #[cfg(test)]
@@ -591,6 +750,199 @@ mod tests {
             hash, expected,
             "Reference hash mismatch! Got 0x{:032x}, expected 0x{:032x}",
             hash, expected
+        );
+    }
+
+    // ========================================================================
+    // LSH Band Generation Tests
+    // ========================================================================
+
+    #[test]
+    fn test_bands_deterministic() {
+        // Same embedding should produce same bands
+        let embedding: Vec<f32> = vec![0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
+            .into_iter()
+            .cycle()
+            .take(768)
+            .collect();
+        let seed = 0x454c4944_53494d48;
+
+        let bands1 = embedding_to_bands(&embedding, 4, seed);
+        let bands2 = embedding_to_bands(&embedding, 4, seed);
+
+        assert_eq!(bands1, bands2, "Bands must be deterministic");
+    }
+
+    #[test]
+    fn test_similar_embeddings_share_band() {
+        // Two similar embeddings should share at least one band
+        let seed = 0x454c4944_53494d48;
+
+        // Create a base embedding
+        let base: Vec<f32> = (0..768).map(|i| (i as f32 * 0.001).sin()).collect();
+
+        // Create a very similar embedding (small perturbation)
+        let similar: Vec<f32> = base.iter().map(|&x| x + 0.001).collect();
+
+        let bands_base = embedding_to_bands(&base, 4, seed);
+        let bands_similar = embedding_to_bands(&similar, 4, seed);
+
+        // Check if they share at least one band
+        let shared_bands = bands_base
+            .iter()
+            .zip(bands_similar.iter())
+            .filter(|(a, b)| a == b)
+            .count();
+
+        // Very similar embeddings should share most or all bands
+        assert!(
+            shared_bands >= 1,
+            "Similar embeddings should share at least one band, got {} shared out of 4",
+            shared_bands
+        );
+    }
+
+    #[test]
+    fn test_invalid_num_bands() {
+        // num_bands that don't divide 16 should return empty
+        let hash = [0u8; 16];
+
+        // Invalid values
+        assert!(mini128_to_bands(&hash, 0).is_empty(), "0 bands should fail");
+        assert!(mini128_to_bands(&hash, 3).is_empty(), "3 bands should fail");
+        assert!(mini128_to_bands(&hash, 5).is_empty(), "5 bands should fail");
+        assert!(mini128_to_bands(&hash, 6).is_empty(), "6 bands should fail");
+        assert!(mini128_to_bands(&hash, 7).is_empty(), "7 bands should fail");
+        assert!(mini128_to_bands(&hash, 9).is_empty(), "9 bands should fail");
+        assert!(
+            mini128_to_bands(&hash, 15).is_empty(),
+            "15 bands should fail"
+        );
+        assert!(
+            mini128_to_bands(&hash, 32).is_empty(),
+            "32 bands should fail"
+        );
+
+        // Valid values
+        assert_eq!(mini128_to_bands(&hash, 1).len(), 1);
+        assert_eq!(mini128_to_bands(&hash, 2).len(), 2);
+        assert_eq!(mini128_to_bands(&hash, 4).len(), 4);
+        assert_eq!(mini128_to_bands(&hash, 8).len(), 8);
+        assert_eq!(mini128_to_bands(&hash, 16).len(), 16);
+    }
+
+    #[test]
+    fn test_band_sizes() {
+        let hash = [
+            0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E,
+            0x0F, 0x10,
+        ];
+
+        // 1 band = 16 bytes = 26 chars
+        let bands_1 = mini128_to_bands(&hash, 1);
+        assert_eq!(bands_1.len(), 1);
+        assert_eq!(bands_1[0].len(), 26);
+
+        // 2 bands = 8 bytes each = 13 chars each
+        let bands_2 = mini128_to_bands(&hash, 2);
+        assert_eq!(bands_2.len(), 2);
+        for band in &bands_2 {
+            assert_eq!(band.len(), 13);
+        }
+
+        // 4 bands = 4 bytes each = 7 chars each
+        let bands_4 = mini128_to_bands(&hash, 4);
+        assert_eq!(bands_4.len(), 4);
+        for band in &bands_4 {
+            assert_eq!(band.len(), 7);
+        }
+
+        // 8 bands = 2 bytes each = 4 chars each
+        let bands_8 = mini128_to_bands(&hash, 8);
+        assert_eq!(bands_8.len(), 8);
+        for band in &bands_8 {
+            assert_eq!(band.len(), 4);
+        }
+
+        // 16 bands = 1 byte each = 2 chars each
+        let bands_16 = mini128_to_bands(&hash, 16);
+        assert_eq!(bands_16.len(), 16);
+        for band in &bands_16 {
+            assert_eq!(band.len(), 2);
+        }
+    }
+
+    #[test]
+    fn test_band_content_matches_hash_segments() {
+        // Verify bands contain correct segments of the hash
+        let hash = [
+            0x01, 0x02, 0x03, 0x04, // Band 0 (4 bands)
+            0x05, 0x06, 0x07, 0x08, // Band 1
+            0x09, 0x0A, 0x0B, 0x0C, // Band 2
+            0x0D, 0x0E, 0x0F, 0x10, // Band 3
+        ];
+
+        let bands = mini128_to_bands(&hash, 4);
+
+        // Verify each band by encoding the expected bytes
+        use super::super::encoding::encode_sortable;
+        assert_eq!(bands[0], encode_sortable(&[0x01, 0x02, 0x03, 0x04]));
+        assert_eq!(bands[1], encode_sortable(&[0x05, 0x06, 0x07, 0x08]));
+        assert_eq!(bands[2], encode_sortable(&[0x09, 0x0A, 0x0B, 0x0C]));
+        assert_eq!(bands[3], encode_sortable(&[0x0D, 0x0E, 0x0F, 0x10]));
+    }
+
+    #[test]
+    fn test_embedding_to_bands_invalid() {
+        // embedding_to_bands should also handle invalid num_bands
+        let embedding = vec![0.1f32; 768];
+        let seed = 0x454c4944_53494d48;
+
+        assert!(embedding_to_bands(&embedding, 0, seed).is_empty());
+        assert!(embedding_to_bands(&embedding, 3, seed).is_empty());
+        assert!(embedding_to_bands(&embedding, 5, seed).is_empty());
+    }
+
+    #[test]
+    fn test_bands_all_lowercase_base32hex() {
+        // Verify bands use valid base32hex alphabet (0-9, a-v)
+        let embedding: Vec<f32> = (0..768).map(|i| (i as f32 * 0.01).cos()).collect();
+        let seed = 0x454c4944_53494d48;
+
+        let bands = embedding_to_bands(&embedding, 4, seed);
+
+        for band in &bands {
+            for c in band.chars() {
+                assert!(
+                    c.is_ascii_digit() || ('a'..='v').contains(&c),
+                    "Invalid character '{}' in band, expected base32hex (0-9, a-v)",
+                    c
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_bands_different_embeddings_differ() {
+        // Different embeddings should produce different bands
+        let seed = 0x454c4944_53494d48;
+
+        let emb1: Vec<f32> = vec![1.0; 768];
+        let emb2: Vec<f32> = vec![-1.0; 768];
+
+        let bands1 = embedding_to_bands(&emb1, 4, seed);
+        let bands2 = embedding_to_bands(&emb2, 4, seed);
+
+        // At least some bands should differ for orthogonal embeddings
+        let matching_bands = bands1
+            .iter()
+            .zip(bands2.iter())
+            .filter(|(a, b)| a == b)
+            .count();
+
+        assert!(
+            matching_bands < 4,
+            "Orthogonal embeddings should have mostly different bands"
         );
     }
 }

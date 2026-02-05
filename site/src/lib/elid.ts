@@ -98,6 +98,8 @@ interface ElidWasmModule {
   encodeElidCrossDimensional?: (embedding: Float64Array, commonDims: number) => string;
   elidHammingDistance?: (elid1: string, elid2: string) => number;
   getElidMetadata?: (elid: string) => ElidMetadata | null;
+  embeddingToBands?: (embedding: Float64Array, numBands: number, seed?: bigint) => string[];
+  mini128ToBands?: (hash: Uint8Array, numBands: number) => string[];
 }
 
 let wasmModule: ElidWasmModule | null = null;
@@ -391,6 +393,51 @@ export function getElidMetadata(elid: string): ElidMetadata | null {
     return wasmModule.getElidMetadata(elid);
   } catch (e) {
     console.error("getElidMetadata error:", e);
+    return null;
+  }
+}
+
+// --- LSH Band Functions ---
+
+/**
+ * Generate LSH bands from an embedding for database querying.
+ * Similar embeddings will share at least one band with high probability.
+ *
+ * @param embedding - The embedding vector
+ * @param numBands - Number of bands (1, 2, 4, 8, or 16). Default: 4
+ * @param seed - Optional seed for SimHash generation
+ * @returns Array of base32hex band strings, or null if not available/error
+ */
+export function embeddingToBands(
+  embedding: Float64Array,
+  numBands: number = 4,
+  seed?: bigint
+): string[] | null {
+  if (!wasmModule?.embeddingToBands) return null;
+  try {
+    return wasmModule.embeddingToBands(embedding, numBands, seed);
+  } catch (e) {
+    console.error("embeddingToBands error:", e);
+    return null;
+  }
+}
+
+/**
+ * Generate LSH bands from a Mini128 hash.
+ *
+ * @param hash - 16-byte Mini128 hash as Uint8Array
+ * @param numBands - Number of bands (1, 2, 4, 8, or 16). Default: 4
+ * @returns Array of base32hex band strings, or null if not available/error
+ */
+export function mini128ToBands(
+  hash: Uint8Array,
+  numBands: number = 4
+): string[] | null {
+  if (!wasmModule?.mini128ToBands) return null;
+  try {
+    return wasmModule.mini128ToBands(hash, numBands);
+  } catch (e) {
+    console.error("mini128ToBands error:", e);
     return null;
   }
 }
