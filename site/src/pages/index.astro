@@ -5,6 +5,7 @@ import LiveSearch from "../components/LiveSearch.vue";
 import SimHashVisualizer from "../components/SimHashVisualizer.vue";
 import EmbeddingEncoder from "../components/EmbeddingEncoder.vue";
 import CrossDimensionalDemo from "../components/CrossDimensionalDemo.vue";
+import ImageSimilarityDemo from "../components/ImageSimilarityDemo.vue";
 ---
 
 <Layout title="ELID - Embedding Locality IDentifier">
@@ -71,6 +72,12 @@ import CrossDimensionalDemo from "../components/CrossDimensionalDemo.vue";
           class="px-4 py-2 text-sm font-medium bg-elid-surface border border-elid-border/50 text-elid-text-muted rounded-lg hover:border-elid-border hover:text-elid-text transition-colors"
         >
           Cross-Dimensional
+        </a>
+        <a
+          href="#multimodal"
+          class="px-4 py-2 text-sm font-medium bg-elid-surface border border-elid-border/50 text-elid-text-muted rounded-lg hover:border-elid-border hover:text-elid-text transition-colors"
+        >
+          Images & More
         </a>
         <a
           href="#compare"
@@ -210,6 +217,28 @@ import CrossDimensionalDemo from "../components/CrossDimensionalDemo.vue";
       </div>
     </section>
 
+    <!-- Section: Multimodal Support -->
+    <section id="multimodal" class="mb-16">
+      <div class="flex items-center gap-3 mb-6">
+        <div
+          class="w-10 h-10 rounded-lg bg-elid-accent/10 flex items-center justify-center"
+        >
+          <span class="text-elid-accent text-lg font-bold">3</span>
+        </div>
+        <div>
+          <h2 class="text-xl sm:text-2xl font-bold">Works With Any Embedding</h2>
+          <p class="text-sm text-elid-text-muted">
+            Images, audio, code — if you can embed it, ELID can index it
+          </p>
+        </div>
+      </div>
+      <div
+        class="bg-elid-surface border border-elid-border/50 rounded-xl p-5 sm:p-6"
+      >
+        <ImageSimilarityDemo client:load />
+      </div>
+    </section>
+
     <!-- Section: What is ELID? -->
     <section class="mb-16">
       <div class="bg-gradient-to-br from-elid-accent/10 to-elid-green/10 border border-elid-accent/20 rounded-xl p-6 sm:p-8">
@@ -259,13 +288,13 @@ LIMIT 10;</code></pre>
       <div class="flex-1 h-px bg-elid-border/30"></div>
     </div>
 
-    <!-- Section 3: Algorithm Comparison -->
+    <!-- Section 4: Algorithm Comparison -->
     <section id="compare" class="mb-16">
       <div class="flex items-center gap-3 mb-6">
         <div
           class="w-10 h-10 rounded-lg bg-elid-accent/10 flex items-center justify-center"
         >
-          <span class="text-elid-accent text-lg font-bold">3</span>
+          <span class="text-elid-accent text-lg font-bold">4</span>
         </div>
         <div>
           <h2 class="text-xl sm:text-2xl font-bold">Algorithm Comparison</h2>
@@ -281,13 +310,13 @@ LIMIT 10;</code></pre>
       </div>
     </section>
 
-    <!-- Section 4: Live Search -->
+    <!-- Section 5: Live Search -->
     <section id="search" class="mb-16">
       <div class="flex items-center gap-3 mb-6">
         <div
           class="w-10 h-10 rounded-lg bg-elid-accent/10 flex items-center justify-center"
         >
-          <span class="text-elid-accent text-lg font-bold">4</span>
+          <span class="text-elid-accent text-lg font-bold">5</span>
         </div>
         <div>
           <h2 class="text-xl sm:text-2xl font-bold">Fuzzy Search</h2>
@@ -303,13 +332,13 @@ LIMIT 10;</code></pre>
       </div>
     </section>
 
-    <!-- Section 5: SimHash Visualizer -->
+    <!-- Section 6: SimHash Visualizer -->
     <section id="simhash" class="mb-16">
       <div class="flex items-center gap-3 mb-6">
         <div
           class="w-10 h-10 rounded-lg bg-elid-accent/10 flex items-center justify-center"
         >
-          <span class="text-elid-accent text-lg font-bold">5</span>
+          <span class="text-elid-accent text-lg font-bold">6</span>
         </div>
         <div>
           <h2 class="text-xl sm:text-2xl font-bold">SimHash Visualizer</h2>

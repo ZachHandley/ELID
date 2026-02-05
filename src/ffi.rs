@@ -585,6 +585,150 @@ mod embeddings_ffi {
 #[cfg(feature = "embeddings")]
 pub use embeddings_ffi::*;
 
+// ============================================================================
+// Model FFI Bindings (feature = "models-text" and "models-image")
+// ============================================================================
+
+/// Embed text using Model2Vec potion-base-8M model
+///
+/// Returns a 256-dimensional embedding as a float array.
+/// Caller must free with `elid_free_embedding(ptr, len)`.
+/// Returns NULL on error.
+///
+/// # Safety
+///
+/// - `text` must be a valid, null-terminated UTF-8 string.
+/// - `out_len` must be a valid pointer where the array length will be written.
+/// - The returned array must be freed with `elid_free_embedding()`.
+#[cfg(feature = "models-text")]
+#[no_mangle]
+pub unsafe extern "C" fn elid_embed_text(
+    text: *const c_char,
+    out_len: *mut usize,
+) -> *mut f32 {
+    if text.is_null() || out_len.is_null() {
+        return std::ptr::null_mut();
+    }
+
+    let text_str = match c_str_to_rust(text) {
+        Some(s) => s,
+        None => return std::ptr::null_mut(),
+    };
+
+    match crate::models::embed_text(text_str) {
+        Ok(embedding) => {
+            let len = embedding.len();
+            let mut boxed = embedding.into_boxed_slice();
+            let ptr = boxed.as_mut_ptr();
+            std::mem::forget(boxed);
+            *out_len = len;
+            ptr
+        }
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+/// Embed image using MobileNetV3-Small model
+///
+/// Takes raw image bytes (JPEG or PNG).
+/// Returns a 1024-dimensional embedding as a float array.
+/// Caller must free with `elid_free_embedding(ptr, len)`.
+/// Returns NULL on error.
+///
+/// # Safety
+///
+/// - `image_bytes` must be a valid pointer to an array of `image_len` bytes.
+/// - `image_len` must be the actual length of the image data.
+/// - `out_len` must be a valid pointer where the array length will be written.
+/// - The returned array must be freed with `elid_free_embedding()`.
+#[cfg(feature = "models-image")]
+#[no_mangle]
+pub unsafe extern "C" fn elid_embed_image(
+    image_bytes: *const u8,
+    image_len: usize,
+    out_len: *mut usize,
+) -> *mut f32 {
+    if image_bytes.is_null() || out_len.is_null() || image_len == 0 {
+        return std::ptr::null_mut();
+    }
+
+    let bytes = std::slice::from_raw_parts(image_bytes, image_len);
+
+    match crate::models::embed_image(bytes) {
+        Ok(embedding) => {
+            let len = embedding.len();
+            let mut boxed = embedding.into_boxed_slice();
+            let ptr = boxed.as_mut_ptr();
+            std::mem::forget(boxed);
+            *out_len = len;
+            ptr
+        }
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
+// ============================================================================
+// LSH Bands FFI Binding (feature = "embeddings")
+// ============================================================================
+
+/// Generate LSH bands from an embedding
+///
+/// Computes a 128-bit SimHash of the embedding and splits it into bands for
+/// locality-sensitive hashing. This enables efficient approximate nearest
+/// neighbor search using database indexes.
+///
+/// Returns a newline-separated string of bands. The format is:
+/// `band0\nband1\nband2\n...\nbandN`
+///
+/// Each band is a base32hex-encoded string (lowercase alphanumeric characters only).
+///
+/// Caller must free with `elid_free_string()`.
+/// Returns NULL on error (invalid parameters, null pointers).
+///
+/// # Parameters
+///
+/// - `embedding`: Pointer to embedding vector (f32 array)
+/// - `len`: Number of elements in the embedding
+/// - `num_bands`: Number of bands (must be 1, 2, 4, 8, or 16)
+/// - `seed`: Master seed for deterministic hashing
+///
+/// # Safety
+///
+/// - `embedding` must be a valid pointer to an array of `len` f32 values.
+/// - The returned string must be freed with `elid_free_string()`.
+#[cfg(feature = "embeddings")]
+#[no_mangle]
+pub unsafe extern "C" fn elid_embedding_to_bands(
+    embedding: *const f32,
+    len: usize,
+    num_bands: u8,
+    seed: u64,
+) -> *mut c_char {
+    if embedding.is_null() || len == 0 {
+        return std::ptr::null_mut();
+    }
+
+    // Validate num_bands: must be 1, 2, 4, 8, or 16
+    if num_bands == 0 || 16 % num_bands != 0 {
+        return std::ptr::null_mut();
+    }
+
+    let slice = std::slice::from_raw_parts(embedding, len);
+    let bands = crate::embeddings::embedding_to_bands(slice, num_bands, seed);
+
+    if bands.is_empty() {
+        return std::ptr::null_mut();
+    }
+
+    // Join bands with newline separator
+    let result = bands.join("\n");
+
+    match CString::new(result) {
+        Ok(cs) => cs.into_raw(),
+        Err(_) => std::ptr::null_mut(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -825,6 +969,171 @@ mod embeddings_tests {
             // Should not crash
             elid_free_embedding(ptr::null_mut(), 0);
             elid_free_embedding(ptr::null_mut(), 100);
+        }
+    }
+
+    #[test]
+    fn test_ffi_embedding_to_bands() {
+        let embedding: Vec<f32> = (0..256).map(|i| (i as f32 / 128.0) - 1.0).collect();
+        let seed = 0x454c4944_53494d48u64;
+        unsafe {
+            let bands = elid_embedding_to_bands(embedding.as_ptr(), embedding.len(), 4, seed);
+            assert!(!bands.is_null(), "Should generate bands successfully");
+
+            // Parse the newline-separated string
+            let bands_str = CStr::from_ptr(bands).to_str().unwrap();
+            let band_vec: Vec<&str> = bands_str.split('\n').collect();
+            assert_eq!(band_vec.len(), 4, "Should have 4 bands");
+
+            // Verify bands are base32hex encoded (lowercase alphanumeric)
+            for band in &band_vec {
+                assert!(
+                    band.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()),
+                    "Band should be base32hex encoded: {}",
+                    band
+                );
+            }
+
+            elid_free_string(bands);
+        }
+    }
+
+    #[test]
+    fn test_ffi_embedding_to_bands_null_safety() {
+        unsafe {
+            // NULL embedding
+            let result = elid_embedding_to_bands(ptr::null(), 128, 4, 0);
+            assert!(result.is_null(), "Should return NULL for null embedding");
+
+            // Zero length
+            let embedding: Vec<f32> = vec![0.1; 128];
+            let result = elid_embedding_to_bands(embedding.as_ptr(), 0, 4, 0);
+            assert!(result.is_null(), "Should return NULL for zero length");
+        }
+    }
+
+    #[test]
+    fn test_ffi_embedding_to_bands_invalid_num_bands() {
+        let embedding: Vec<f32> = (0..256).map(|i| (i as f32 / 128.0) - 1.0).collect();
+        unsafe {
+            // Invalid num_bands values: 0, 3, 5, 6, 7, 9, etc.
+            let result = elid_embedding_to_bands(embedding.as_ptr(), embedding.len(), 0, 0);
+            assert!(result.is_null(), "Should return NULL for num_bands=0");
+
+            let result = elid_embedding_to_bands(embedding.as_ptr(), embedding.len(), 3, 0);
+            assert!(result.is_null(), "Should return NULL for num_bands=3");
+
+            let result = elid_embedding_to_bands(embedding.as_ptr(), embedding.len(), 5, 0);
+            assert!(result.is_null(), "Should return NULL for num_bands=5");
+
+            // Valid num_bands values: 1, 2, 4, 8, 16
+            let result = elid_embedding_to_bands(embedding.as_ptr(), embedding.len(), 1, 0);
+            assert!(!result.is_null(), "Should succeed for num_bands=1");
+            elid_free_string(result);
+
+            let result = elid_embedding_to_bands(embedding.as_ptr(), embedding.len(), 2, 0);
+            assert!(!result.is_null(), "Should succeed for num_bands=2");
+            elid_free_string(result);
+
+            let result = elid_embedding_to_bands(embedding.as_ptr(), embedding.len(), 8, 0);
+            assert!(!result.is_null(), "Should succeed for num_bands=8");
+            elid_free_string(result);
+
+            let result = elid_embedding_to_bands(embedding.as_ptr(), embedding.len(), 16, 0);
+            assert!(!result.is_null(), "Should succeed for num_bands=16");
+            elid_free_string(result);
+        }
+    }
+
+    #[test]
+    fn test_ffi_embedding_to_bands_deterministic() {
+        let embedding: Vec<f32> = (0..256).map(|i| (i as f32 / 128.0) - 1.0).collect();
+        let seed = 0x12345678u64;
+        unsafe {
+            let bands1 = elid_embedding_to_bands(embedding.as_ptr(), embedding.len(), 4, seed);
+            let bands2 = elid_embedding_to_bands(embedding.as_ptr(), embedding.len(), 4, seed);
+
+            assert!(!bands1.is_null());
+            assert!(!bands2.is_null());
+
+            let str1 = CStr::from_ptr(bands1).to_str().unwrap();
+            let str2 = CStr::from_ptr(bands2).to_str().unwrap();
+            assert_eq!(str1, str2, "Same embedding and seed should produce same bands");
+
+            elid_free_string(bands1);
+            elid_free_string(bands2);
+        }
+    }
+}
+
+#[cfg(all(test, feature = "models-text"))]
+mod models_text_tests {
+    use super::*;
+    use std::ptr;
+
+    #[test]
+    fn test_ffi_embed_text_null_safety() {
+        unsafe {
+            let mut out_len: usize = 0;
+
+            // NULL text
+            let result = elid_embed_text(ptr::null(), &mut out_len);
+            assert!(result.is_null(), "Should return NULL for null text");
+
+            // NULL out_len
+            let text = CString::new("Hello, world!").unwrap();
+            let result = elid_embed_text(text.as_ptr(), ptr::null_mut());
+            assert!(result.is_null(), "Should return NULL for null out_len");
+        }
+    }
+
+    #[test]
+    fn test_ffi_embed_text_not_implemented() {
+        // Currently the model returns an error since it's not implemented yet
+        let text = CString::new("Hello, world!").unwrap();
+        unsafe {
+            let mut out_len: usize = 0;
+            let result = elid_embed_text(text.as_ptr(), &mut out_len);
+            // Model is not implemented yet, should return NULL
+            assert!(result.is_null(), "Should return NULL when model not loaded");
+        }
+    }
+}
+
+#[cfg(all(test, feature = "models-image"))]
+mod models_image_tests {
+    use super::*;
+    use std::ptr;
+
+    #[test]
+    fn test_ffi_embed_image_null_safety() {
+        unsafe {
+            let mut out_len: usize = 0;
+
+            // NULL image_bytes
+            let result = elid_embed_image(ptr::null(), 100, &mut out_len);
+            assert!(result.is_null(), "Should return NULL for null image_bytes");
+
+            // Zero length
+            let bytes = vec![0u8; 100];
+            let result = elid_embed_image(bytes.as_ptr(), 0, &mut out_len);
+            assert!(result.is_null(), "Should return NULL for zero length");
+
+            // NULL out_len
+            let result = elid_embed_image(bytes.as_ptr(), bytes.len(), ptr::null_mut());
+            assert!(result.is_null(), "Should return NULL for null out_len");
+        }
+    }
+
+    #[test]
+    fn test_ffi_embed_image_not_implemented() {
+        // Currently the model returns an error since it's not implemented yet
+        let dummy_bytes = vec![0u8; 100];
+        unsafe {
+            let mut out_len: usize = 0;
+            let result = elid_embed_image(dummy_bytes.as_ptr(), dummy_bytes.len(), &mut out_len);
+            // Model is not implemented yet, should return NULL
+            assert!(result.is_null(), "Should return NULL when model not loaded");
         }
     }
 }

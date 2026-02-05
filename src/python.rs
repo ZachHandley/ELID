@@ -924,6 +924,129 @@ fn get_metadata(elid_str: &str, py: Python<'_>) -> PyResult<Option<Py<pyo3::PyAn
     Ok(Some(dict.unbind().into()))
 }
 
+// ============================================================================
+// Model functions (feature-gated)
+// ============================================================================
+
+/// Embed text using Model2Vec potion-base-8M model
+///
+/// Converts input text into a 256-dimensional embedding vector using
+/// the Model2Vec potion-base-8M model. This is useful for semantic
+/// text similarity, search, and clustering.
+///
+/// Args:
+///     text (str): Input text to embed
+///
+/// Returns:
+///     list[float]: 256-dimensional embedding as list of floats
+///
+/// Raises:
+///     ValueError: If model not available or inference fails
+///
+/// Example:
+///     >>> import elid
+///     >>> embedding = elid.embed_text("Hello, world!")
+///     >>> len(embedding)
+///     256
+///     >>> type(embedding[0])
+///     <class 'float'>
+#[cfg(feature = "models-text")]
+#[pyfunction]
+fn embed_text(text: &str) -> PyResult<Vec<f32>> {
+    crate::models::embed_text(text)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+}
+
+/// Embed image using MobileNetV3-Small model
+///
+/// Converts an image into a 1024-dimensional embedding vector using
+/// the MobileNetV3-Small model. Supports JPEG and PNG formats.
+/// This is useful for image similarity, search, and clustering.
+///
+/// Args:
+///     image_bytes (bytes): Raw image bytes (JPEG or PNG)
+///
+/// Returns:
+///     list[float]: 1024-dimensional embedding as list of floats
+///
+/// Raises:
+///     ValueError: If model not available, image decode fails, or inference fails
+///
+/// Example:
+///     >>> import elid
+///     >>> with open("image.jpg", "rb") as f:
+///     ...     image_bytes = f.read()
+///     >>> embedding = elid.embed_image(image_bytes)
+///     >>> len(embedding)
+///     1024
+///     >>> type(embedding[0])
+///     <class 'float'>
+#[cfg(feature = "models-image")]
+#[pyfunction]
+fn embed_image(image_bytes: &[u8]) -> PyResult<Vec<f32>> {
+    crate::models::embed_image(image_bytes)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+}
+
+// ============================================================================
+// LSH Band functions (feature-gated)
+// ============================================================================
+
+/// Generate LSH bands from an embedding for database querying
+///
+/// Computes a 128-bit SimHash of the embedding and splits it into
+/// `num_bands` equal parts, each encoded as a base32hex string.
+/// Band matching is used for efficient approximate nearest neighbor
+/// search: if two embeddings share at least one identical band,
+/// they are likely similar.
+///
+/// Args:
+///     embedding (list[float]): Embedding vector as list of floats
+///     num_bands (int): Number of bands (1, 2, 4, 8, or 16). Default: 4
+///     seed (int, optional): Seed for SimHash generation. Default: 0x454c494453494d48
+///
+/// Returns:
+///     list[str]: List of base32hex band strings
+///
+/// Band Sizes:
+///     | num_bands | bits/band | chars/band |
+///     |-----------|-----------|------------|
+///     | 1         | 128       | 26         |
+///     | 2         | 64        | 13         |
+///     | 4         | 32        | 7          |
+///     | 8         | 16        | 4          |
+///     | 16        | 8         | 2          |
+///
+/// Example:
+///     >>> import elid
+///     >>> import numpy as np
+///     >>> embedding = np.random.randn(768).astype(np.float32).tolist()
+///     >>> bands = elid.embedding_to_bands(embedding, num_bands=4)
+///     >>> len(bands)
+///     4
+///     >>> len(bands[0])  # 32 bits = 4 bytes = 7 base32hex chars
+///     7
+///
+/// Database Usage:
+///     Store each band in an indexed column for efficient querying:
+///     ```sql
+///     CREATE INDEX idx_band0 ON embeddings(band0);
+///     -- Query for similar embeddings
+///     SELECT * FROM embeddings
+///     WHERE band0 = ? OR band1 = ? OR band2 = ? OR band3 = ?;
+///     ```
+#[cfg(feature = "embeddings")]
+#[pyfunction]
+#[pyo3(name = "embedding_to_bands", signature = (embedding, num_bands=4, seed=None))]
+fn embedding_to_bands_py(
+    embedding: Vec<f32>,
+    num_bands: u8,
+    seed: Option<u64>,
+) -> Vec<String> {
+    let seed = seed.unwrap_or(0x454c4944_53494d48); // Default "ELIDSIMH" seed
+    crate::embeddings::embedding_to_bands(&embedding, num_bands, seed)
+}
+
 /// ELID - Efficient Levenshtein and String Similarity Library
 ///
 /// A fast library for computing various string similarity metrics.
@@ -967,7 +1090,17 @@ fn elid(m: &Bound<'_, PyModule>) -> PyResult<()> {
         // FullVector types
         m.add_class::<VectorPrecision>()?;
         m.add_class::<DimensionMode>()?;
+
+        // LSH band generation
+        m.add_function(wrap_pyfunction!(embedding_to_bands_py, m)?)?;
     }
+
+    // Model functions (feature-gated)
+    #[cfg(feature = "models-text")]
+    m.add_function(wrap_pyfunction!(embed_text, m)?)?;
+
+    #[cfg(feature = "models-image")]
+    m.add_function(wrap_pyfunction!(embed_image, m)?)?;
 
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 

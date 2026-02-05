@@ -194,6 +194,9 @@ let distance = levenshtein_with_opts("  HELLO  ", "hello", &opts); // 0
 |---------|-------------|--------------|
 | `strings` | String similarity algorithms (default) | None |
 | `embeddings` | Embedding encoding (default) | rand, blake3, etc. |
+| `models` | Base ONNX model support | tract-onnx |
+| `models-text` | Text embedding (Model2Vec, 256-dim) | models |
+| `models-image` | Image embedding (MobileNetV3, 1024-dim) | models, image |
 | `wasm` | WebAssembly bindings (includes embeddings) | wasm-bindgen, js-sys, getrandom |
 | `python` | Python bindings via PyO3 (includes embeddings) | pyo3, numpy, rayon |
 | `ffi` | C FFI bindings | None (enables unsafe) |
@@ -205,6 +208,54 @@ let distance = levenshtein_with_opts("  HELLO  ", "hello", &opts); // 0
 - 1.4M+ string comparisons per second (Python benchmarks)
 - ~96KB WASM binary (strings only)
 - Embedding encoding: <1ms per vector
+
+## Built-in Embedding Models
+
+ELID includes optional ONNX models for generating embeddings directly, without external API calls. Models are bundled via separate packages:
+
+| Package | Model | Dimensions | Size |
+|---------|-------|------------|------|
+| `elid-text` | Model2Vec potion-base-8M | 256 | ~8MB |
+| `elid-image` | MobileNetV3-Small | 1024 | ~5MB |
+
+**Text embeddings:**
+```rust
+use elid::models::embed_text;
+
+let embedding = embed_text("Hello, world!")?;
+assert_eq!(embedding.len(), 256);
+```
+
+**Image embeddings:**
+```rust
+use elid::models::embed_image;
+
+let bytes = std::fs::read("photo.jpg")?;
+let embedding = embed_image(&bytes)?;
+assert_eq!(embedding.len(), 1024);
+```
+
+### LSH Bands for Database Querying
+
+Convert embeddings to LSH bands for efficient database similarity search:
+
+```javascript
+import { embeddingToBands } from 'elid';
+
+// Split embedding into 4 bands (32 bits each)
+const bands = embeddingToBands(embedding, 4);
+
+// Store bands in database columns
+// Query with OR across bands for approximate nearest neighbors:
+// SELECT * FROM embeddings WHERE band0 = ? OR band1 = ? OR band2 = ? OR band3 = ?
+```
+
+```rust
+use elid::embeddings::embedding_to_bands;
+
+let bands = embedding_to_bands(&embedding, 4, 0x454c4944_53494d48);
+// bands: Vec<String> with 4 base32hex-encoded band strings
+```
 
 ## Use Cases
 

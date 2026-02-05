@@ -29,6 +29,9 @@
 //!
 //! - `strings` (default): Zero-dependency string similarity algorithms
 //! - `embeddings` (default): Vector encoding with Mini128, Morton, and Hilbert profiles
+//! - `models`: Base ONNX model support using tract-onnx (WASM compatible)
+//! - `models-text`: Text embedding models (Model2Vec potion-base-8M)
+//! - `models-image`: Image embedding models (MobileNetV3-Small)
 //! - `wasm`: WebAssembly bindings (includes embeddings)
 //! - `python`: Python bindings via PyO3 (includes embeddings + numpy)
 //! - `ffi`: C FFI bindings
@@ -88,6 +91,9 @@ pub mod python;
 
 #[cfg(feature = "ffi")]
 pub mod ffi;
+
+#[cfg(feature = "models")]
+pub mod models;
 
 // Re-export everything from strings for backwards compatibility
 pub use strings::{

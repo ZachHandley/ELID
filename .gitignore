@@ -46,6 +46,20 @@ site/.astro/
 pkg/
 pkg-node/
 pkg-web/
+pkg-embedtext/
+pkg-embedtext-node/
+pkg-embedtext-web/
+pkg-embedimage/
+pkg-embedimage-node/
+pkg-embedimage-web/
+pkg-both/
+pkg-both-node/
+pkg-both-web/
+
+# Downloaded ML models (use scripts/download_models.py)
+models/*.onnx
+models/*.safetensors
+models/*.bin
 
 # Node.js
 node_modules/
