@@ -1,6 +1,25 @@
 //! Common utilities for string processing
 
-use crate::SimilarityOpts;
+/// Options for configuring string similarity algorithms
+#[derive(Debug, Clone, Copy)]
+pub struct SimilarityOpts {
+    /// Case-sensitive comparison (default: true)
+    pub case_sensitive: bool,
+    /// Trim whitespace before comparison (default: false)
+    pub trim_whitespace: bool,
+    /// Prefix scale for Jaro-Winkler (default: 0.1, max: 0.25)
+    pub prefix_scale: f64,
+}
+
+impl Default for SimilarityOpts {
+    fn default() -> Self {
+        Self {
+            case_sensitive: true,
+            trim_whitespace: false,
+            prefix_scale: 0.1,
+        }
+    }
+}
 
 /// Preprocess strings according to the given options.
 ///

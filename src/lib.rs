@@ -1,17 +1,57 @@
-//! # ELID - Efficient Levenshtein and other string similarity metrics
+//! # ELID - Embedding Locality IDentifier
 //!
-//! A fast, zero-dependency library for computing string similarity metrics.
+//! ELID enables vector search without a vector store by encoding high-dimensional embeddings
+//! into sortable string IDs that preserve locality. Similar vectors produce similar IDs,
+//! allowing you to use standard database indexes for similarity search.
 //!
-//! ## Features
+//! ELID also includes a complete suite of fast, zero-dependency string similarity algorithms.
+//!
+//! ## Feature Sets
+//!
+//! ### Embedding Encoding (`embeddings` feature)
+//!
+//! Convert embeddings from any ML model into compact, sortable identifiers:
+//!
+//! - **Mini128**: 128-bit SimHash using signed random projections (fast, Hamming distance)
+//! - **Morton10x10**: Z-order curve encoding (database range queries)
+//! - **Hilbert10x10**: Hilbert curve encoding (maximum locality preservation)
+//!
+//! ### String Similarity (`strings` feature, default)
 //!
 //! - **Levenshtein Distance**: Classic edit distance algorithm
 //! - **Normalized Levenshtein**: Returns similarity as a value between 0.0 and 1.0
 //! - **Jaro-Winkler Similarity**: Better for short strings like names
 //! - **Hamming Distance**: For equal-length strings
 //! - **Optimal String Alignment (OSA)**: Levenshtein with transpositions
-//! - **SimHash**: Locality-sensitive hashing for numeric similarity queries
+//! - **SimHash**: Locality-sensitive hashing for string similarity queries
 //!
-//! ## Example
+//! ## Feature Flags
+//!
+//! - `strings` (default): Zero-dependency string similarity algorithms
+//! - `embeddings`: Vector encoding with Mini128, Morton, and Hilbert profiles
+//! - `wasm` / `wasm-embeddings`: WebAssembly bindings
+//! - `python` / `python-embeddings`: Python bindings via PyO3
+//! - `ffi`: C FFI bindings
+//!
+//! ## Embedding Encoding Example
+//!
+//! ```rust,ignore
+//! use elid::embeddings::{encode, Profile, hamming_distance};
+//!
+//! // Get embeddings from your ML model
+//! let embedding1 = model.embed("Hello, world!")?;
+//! let embedding2 = model.embed("Hello, universe!")?;
+//!
+//! // Encode to sortable ELIDs
+//! let profile = Profile::default(); // Mini128
+//! let elid1 = encode(&embedding1, &profile)?;
+//! let elid2 = encode(&embedding2, &profile)?;
+//!
+//! // Compare via Hamming distance (lower = more similar)
+//! let distance = hamming_distance(&elid1, &elid2)?;
+//! ```
+//!
+//! ## String Similarity Example
 //!
 //! ```rust
 //! use elid::{levenshtein, normalized_levenshtein, jaro_winkler, simhash, simhash_similarity};
@@ -35,12 +75,10 @@
 #![deny(missing_docs)]
 #![cfg_attr(not(feature = "ffi"), deny(unsafe_code))]
 
-mod common;
-mod hamming;
-mod jaro_winkler;
-mod levenshtein;
-mod osa;
-mod simhash;
+mod strings;
+
+#[cfg(feature = "embeddings")]
+pub mod embeddings;
 
 #[cfg(feature = "wasm")]
 pub mod wasm;
@@ -51,32 +89,12 @@ pub mod python;
 #[cfg(feature = "ffi")]
 pub mod ffi;
 
-pub use hamming::{hamming, normalized_hamming};
-pub use jaro_winkler::{jaro, jaro_winkler, jaro_winkler_with_prefix};
-pub use levenshtein::{levenshtein, levenshtein_with_opts, normalized_levenshtein};
-pub use osa::{normalized_osa, osa_distance};
-pub use simhash::{find_similar_hashes, simhash, simhash_distance, simhash_similarity};
-
-/// Options for configuring string similarity algorithms
-#[derive(Debug, Clone, Copy)]
-pub struct SimilarityOpts {
-    /// Case-sensitive comparison (default: true)
-    pub case_sensitive: bool,
-    /// Trim whitespace before comparison (default: false)
-    pub trim_whitespace: bool,
-    /// Prefix scale for Jaro-Winkler (default: 0.1, max: 0.25)
-    pub prefix_scale: f64,
-}
-
-impl Default for SimilarityOpts {
-    fn default() -> Self {
-        Self {
-            case_sensitive: true,
-            trim_whitespace: false,
-            prefix_scale: 0.1,
-        }
-    }
-}
+// Re-export everything from strings for backwards compatibility
+pub use strings::{
+    find_similar_hashes, hamming, jaro, jaro_winkler, jaro_winkler_with_prefix, levenshtein,
+    levenshtein_with_opts, normalized_hamming, normalized_levenshtein, normalized_osa,
+    osa_distance, simhash, simhash_distance, simhash_similarity, SimilarityOpts,
+};
 
 /// Compute the best matching similarity between two strings using multiple algorithms
 /// and return the highest score.

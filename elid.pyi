@@ -1,6 +1,10 @@
 """Type stubs for the ELID string similarity library."""
 
 from typing import Optional
+from enum import Enum
+
+import numpy as np
+import numpy.typing as npt
 
 __version__: str
 
@@ -210,5 +214,101 @@ def find_similar_hashes(
 
     Returns:
         Indices of candidates within the distance threshold.
+    """
+    ...
+
+# ============================================================================
+# Embedding functions (available when built with embeddings feature)
+# ============================================================================
+
+class Profile(Enum):
+    """Encoding profile for embedding vectors.
+
+    Profiles determine how embeddings are transformed into compact identifiers.
+
+    Variants:
+        Mini128: 128-bit SimHash (default, fast cosine similarity via Hamming distance)
+        Morton10x10: Z-order curve encoding for database indexing
+        Hilbert10x10: Hilbert curve encoding for maximum locality preservation
+    """
+
+    Mini128 = ...
+    """128-bit SimHash encoding"""
+    Morton10x10 = ...
+    """Morton (Z-order) curve encoding with 10 dimensions x 10 bits"""
+    Hilbert10x10 = ...
+    """Hilbert curve encoding with 10 dimensions x 10 bits"""
+
+def encode(embedding: npt.NDArray[np.float32], profile: Profile) -> str:
+    """Encode an embedding vector to an ELID string.
+
+    Converts a high-dimensional embedding vector into a compact, sortable identifier
+    using the specified profile. The resulting ELID preserves locality properties
+    for efficient similarity search.
+
+    Args:
+        embedding: Input vector (f32, 64-2048 dimensions)
+        profile: Encoding strategy (Mini128, Morton10x10, or Hilbert10x10)
+
+    Returns:
+        Encoded ELID string
+
+    Raises:
+        ValueError: If embedding dimensions are invalid or values contain NaN/Inf
+
+    Example:
+        >>> import elid
+        >>> import numpy as np
+        >>> embedding = np.random.randn(768).astype(np.float32)
+        >>> elid_str = elid.encode(embedding, elid.Profile.Mini128)
+    """
+    ...
+
+def decode(elid_str: str) -> bytes:
+    """Decode an ELID string to raw bytes.
+
+    Decodes a base32hex-encoded ELID string back to its raw byte representation.
+    This returns the header bytes + payload bytes.
+
+    Args:
+        elid_str: The ELID string to decode
+
+    Returns:
+        Raw bytes (header + payload)
+
+    Raises:
+        ValueError: If the ELID string contains invalid characters
+
+    Example:
+        >>> raw_bytes = elid.decode("01a2b3c4d5e6f7...")
+        >>> len(raw_bytes)  # 18 for Mini128 (2 header + 16 payload)
+    """
+    ...
+
+def elid_hamming_distance(elid1: str, elid2: str) -> int:
+    """Compute Hamming distance between two ELID strings.
+
+    Returns the number of differing bits in the SimHash payloads of two ELIDs.
+    This distance is proportional to the angular distance between the original
+    embeddings. Both ELIDs must use the Mini128 profile.
+
+    Args:
+        elid1: First ELID string
+        elid2: Second ELID string
+
+    Returns:
+        Hamming distance (0-128)
+
+    Raises:
+        ValueError: If either ELID is invalid or uses a non-Mini128 profile
+
+    Example:
+        >>> import elid
+        >>> import numpy as np
+        >>> emb1 = np.random.randn(768).astype(np.float32)
+        >>> emb2 = emb1 + np.random.randn(768).astype(np.float32) * 0.1
+        >>> elid1 = elid.encode(emb1, elid.Profile.Mini128)
+        >>> elid2 = elid.encode(emb2, elid.Profile.Mini128)
+        >>> distance = elid.elid_hamming_distance(elid1, elid2)
     """
     ...

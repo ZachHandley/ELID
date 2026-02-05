@@ -59,7 +59,7 @@ pub unsafe extern "C" fn elid_levenshtein(a: *const c_char, b: *const c_char) ->
         Some(s) => s,
         None => return 0,
     };
-    crate::levenshtein::levenshtein(a_str, b_str)
+    crate::levenshtein(a_str, b_str)
 }
 
 /// Compute the normalized Levenshtein similarity between two strings.
@@ -80,7 +80,7 @@ pub unsafe extern "C" fn elid_normalized_levenshtein(a: *const c_char, b: *const
         Some(s) => s,
         None => return 0.0,
     };
-    crate::levenshtein::normalized_levenshtein(a_str, b_str)
+    crate::normalized_levenshtein(a_str, b_str)
 }
 
 /// Compute the Jaro similarity between two strings.
@@ -101,7 +101,7 @@ pub unsafe extern "C" fn elid_jaro(a: *const c_char, b: *const c_char) -> f64 {
         Some(s) => s,
         None => return 0.0,
     };
-    crate::jaro_winkler::jaro(a_str, b_str)
+    crate::jaro(a_str, b_str)
 }
 
 /// Compute the Jaro-Winkler similarity between two strings.
@@ -122,7 +122,7 @@ pub unsafe extern "C" fn elid_jaro_winkler(a: *const c_char, b: *const c_char) -
         Some(s) => s,
         None => return 0.0,
     };
-    crate::jaro_winkler::jaro_winkler(a_str, b_str)
+    crate::jaro_winkler(a_str, b_str)
 }
 
 /// Compute the Hamming distance between two strings.
@@ -143,7 +143,7 @@ pub unsafe extern "C" fn elid_hamming(a: *const c_char, b: *const c_char) -> i64
         Some(s) => s,
         None => return -1,
     };
-    match crate::hamming::hamming(a_str, b_str) {
+    match crate::hamming(a_str, b_str) {
         Some(dist) => dist as i64,
         None => -1,
     }
@@ -167,7 +167,7 @@ pub unsafe extern "C" fn elid_osa_distance(a: *const c_char, b: *const c_char) -
         Some(s) => s,
         None => return 0,
     };
-    crate::osa::osa_distance(a_str, b_str)
+    crate::osa_distance(a_str, b_str)
 }
 
 /// Compute the best matching similarity between two strings.
@@ -205,7 +205,7 @@ pub unsafe extern "C" fn elid_simhash(text: *const c_char) -> u64 {
         Some(s) => s,
         None => return 0,
     };
-    crate::simhash::simhash(text_str)
+    crate::simhash(text_str)
 }
 
 /// Compute the Hamming distance between two SimHash values.
@@ -213,7 +213,7 @@ pub unsafe extern "C" fn elid_simhash(text: *const c_char) -> u64 {
 /// Returns the number of differing bits. Lower values = higher similarity.
 #[no_mangle]
 pub extern "C" fn elid_simhash_distance(hash1: u64, hash2: u64) -> u32 {
-    crate::simhash::simhash_distance(hash1, hash2)
+    crate::simhash_distance(hash1, hash2)
 }
 
 /// Compute the normalized SimHash similarity between two strings.
@@ -234,7 +234,7 @@ pub unsafe extern "C" fn elid_simhash_similarity(a: *const c_char, b: *const c_c
         Some(s) => s,
         None => return 0.0,
     };
-    crate::simhash::simhash_similarity(a_str, b_str)
+    crate::simhash_similarity(a_str, b_str)
 }
 
 /// Free a string allocated by Rust.

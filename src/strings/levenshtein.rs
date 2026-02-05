@@ -4,7 +4,7 @@
 //! It's defined as the minimum number of single-character edits (insertions, deletions, or substitutions)
 //! required to change one string into the other.
 
-use crate::{common, SimilarityOpts};
+use super::common::{self, SimilarityOpts};
 
 /// Compute the Levenshtein distance between two strings.
 ///

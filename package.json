@@ -1,7 +1,7 @@
 {
   "name": "elid-wasm",
   "version": "0.0.0-dev",
-  "description": "Fast string similarity library for JavaScript - WebAssembly bindings for ELID",
+  "description": "Embedding Locality IDentifier - encode embeddings into sortable string IDs for vector search, plus fast string similarity algorithms (WASM)",
   "main": "pkg/elid.js",
   "types": "pkg/elid.d.ts",
   "files": [
@@ -23,13 +23,13 @@
     "url": "https://github.com/ZachHandley/ELID.git"
   },
   "keywords": [
+    "embeddings",
+    "vector-search",
+    "locality-sensitive-hashing",
     "string-similarity",
     "levenshtein",
     "fuzzy-search",
-    "fuzzy-matching",
     "jaro-winkler",
-    "hamming",
-    "distance",
     "wasm",
     "webassembly",
     "rust"

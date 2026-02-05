@@ -8,6 +8,14 @@
 
 use pyo3::prelude::*;
 
+// Conditional imports for embeddings feature
+#[cfg(feature = "embeddings")]
+use crate::embeddings::{self, Profile as EmbedProfile};
+#[cfg(feature = "embeddings")]
+use numpy::PyReadonlyArray1;
+#[cfg(feature = "embeddings")]
+use pyo3::types::PyBytes;
+
 /// Compute the Levenshtein distance between two strings.
 ///
 /// Returns the minimum number of single-character edits needed to transform one string into another.
@@ -25,7 +33,7 @@ use pyo3::prelude::*;
 ///     3
 #[pyfunction]
 fn levenshtein(a: &str, b: &str) -> usize {
-    crate::levenshtein::levenshtein(a, b)
+    crate::levenshtein(a, b)
 }
 
 /// Compute the normalized Levenshtein similarity between two strings.
@@ -45,7 +53,7 @@ fn levenshtein(a: &str, b: &str) -> usize {
 ///     0.8
 #[pyfunction]
 fn normalized_levenshtein(a: &str, b: &str) -> f64 {
-    crate::levenshtein::normalized_levenshtein(a, b)
+    crate::normalized_levenshtein(a, b)
 }
 
 /// Compute the Jaro similarity between two strings.
@@ -66,7 +74,7 @@ fn normalized_levenshtein(a: &str, b: &str) -> f64 {
 ///     0.944
 #[pyfunction]
 fn jaro(a: &str, b: &str) -> f64 {
-    crate::jaro_winkler::jaro(a, b)
+    crate::jaro(a, b)
 }
 
 /// Compute the Jaro-Winkler similarity between two strings.
@@ -87,7 +95,7 @@ fn jaro(a: &str, b: &str) -> f64 {
 ///     0.961
 #[pyfunction]
 fn jaro_winkler(a: &str, b: &str) -> f64 {
-    crate::jaro_winkler::jaro_winkler(a, b)
+    crate::jaro_winkler(a, b)
 }
 
 /// Compute the Hamming distance between two strings.
@@ -109,7 +117,7 @@ fn jaro_winkler(a: &str, b: &str) -> f64 {
 ///     >>> elid.hamming("hello", "world!")  # Returns None
 #[pyfunction]
 fn hamming(a: &str, b: &str) -> Option<usize> {
-    crate::hamming::hamming(a, b)
+    crate::hamming(a, b)
 }
 
 /// Compute the OSA (Optimal String Alignment) distance between two strings.
@@ -129,7 +137,7 @@ fn hamming(a: &str, b: &str) -> Option<usize> {
 ///     1
 #[pyfunction]
 fn osa_distance(a: &str, b: &str) -> usize {
-    crate::osa::osa_distance(a, b)
+    crate::osa_distance(a, b)
 }
 
 /// Compute the best matching similarity between two strings.
@@ -168,16 +176,14 @@ fn best_match(a: &str, b: &str) -> f64 {
 ///     >>> result
 ///     {'index': 0, 'score': 0.907}
 #[pyfunction]
-fn find_best_match(query: &str, candidates: Vec<String>) -> PyResult<PyObject> {
+fn find_best_match(query: &str, candidates: Vec<String>, py: Python<'_>) -> PyResult<Py<pyo3::PyAny>> {
     let candidate_refs: Vec<&str> = candidates.iter().map(|s| s.as_str()).collect();
     let (idx, score) = crate::find_best_match(query, &candidate_refs);
 
-    Python::with_gil(|py| {
-        let dict = pyo3::types::PyDict::new_bound(py);
-        dict.set_item("index", idx)?;
-        dict.set_item("score", score)?;
-        Ok(dict.unbind().into())
-    })
+    let dict = pyo3::types::PyDict::new(py);
+    dict.set_item("index", idx)?;
+    dict.set_item("score", score)?;
+    Ok(dict.unbind().into())
 }
 
 /// Find all matches above a threshold score.
@@ -201,20 +207,19 @@ fn find_matches_above_threshold(
     query: &str,
     candidates: Vec<String>,
     threshold: f64,
-) -> PyResult<PyObject> {
+    py: Python<'_>,
+) -> PyResult<Py<pyo3::PyAny>> {
     let candidate_refs: Vec<&str> = candidates.iter().map(|s| s.as_str()).collect();
     let matches = crate::find_matches_above_threshold(query, &candidate_refs, threshold);
 
-    Python::with_gil(|py| {
-        let list = pyo3::types::PyList::empty_bound(py);
-        for (idx, score) in matches {
-            let dict = pyo3::types::PyDict::new_bound(py);
-            dict.set_item("index", idx)?;
-            dict.set_item("score", score)?;
-            list.append(dict)?;
-        }
-        Ok(list.unbind().into())
-    })
+    let list = pyo3::types::PyList::empty(py);
+    for (idx, score) in matches {
+        let dict = pyo3::types::PyDict::new(py);
+        dict.set_item("index", idx)?;
+        dict.set_item("score", score)?;
+        list.append(dict)?;
+    }
+    Ok(list.unbind().into())
 }
 
 /// Options for configuring string similarity algorithms.
@@ -287,7 +292,7 @@ impl From<&SimilarityOpts> for crate::SimilarityOpts {
 #[pyfunction]
 fn levenshtein_with_opts(a: &str, b: &str, opts: &SimilarityOpts) -> usize {
     let rust_opts = crate::SimilarityOpts::from(opts);
-    crate::levenshtein::levenshtein_with_opts(a, b, &rust_opts)
+    crate::levenshtein_with_opts(a, b, &rust_opts)
 }
 
 /// Compute the SimHash fingerprint of a string.
@@ -310,7 +315,7 @@ fn levenshtein_with_opts(a: &str, b: &str, opts: &SimilarityOpts) -> usize {
 ///     >>> # hash3 will be different
 #[pyfunction]
 fn simhash(text: &str) -> u64 {
-    crate::simhash::simhash(text)
+    crate::simhash(text)
 }
 
 /// Compute the Hamming distance between two SimHash values.
@@ -332,7 +337,7 @@ fn simhash(text: &str) -> u64 {
 ///     >>> distance  # Low number = similar
 #[pyfunction]
 fn simhash_distance(hash1: u64, hash2: u64) -> u32 {
-    crate::simhash::simhash_distance(hash1, hash2)
+    crate::simhash_distance(hash1, hash2)
 }
 
 /// Compute the normalized SimHash similarity between two strings.
@@ -354,7 +359,7 @@ fn simhash_distance(hash1: u64, hash2: u64) -> u32 {
 ///     >>> similarity2  # ~0.4 (different)
 #[pyfunction]
 fn simhash_similarity(a: &str, b: &str) -> f64 {
-    crate::simhash::simhash_similarity(a, b)
+    crate::simhash_similarity(a, b)
 }
 
 /// Find all hashes within a given distance threshold.
@@ -380,7 +385,160 @@ fn find_similar_hashes(
     candidate_hashes: Vec<u64>,
     max_distance: u32,
 ) -> Vec<usize> {
-    crate::simhash::find_similar_hashes(query_hash, &candidate_hashes, max_distance)
+    crate::find_similar_hashes(query_hash, &candidate_hashes, max_distance)
+}
+
+// ============================================================================
+// Embedding functions (feature-gated)
+// ============================================================================
+
+/// Encoding profile for embedding vectors.
+///
+/// Profiles determine how embeddings are transformed into compact identifiers.
+///
+/// Variants:
+///     Mini128: 128-bit SimHash (default, fast cosine similarity via Hamming distance)
+///     Morton10x10: Z-order curve encoding for database indexing
+///     Hilbert10x10: Hilbert curve encoding for maximum locality preservation
+///
+/// Example:
+///     >>> import elid
+///     >>> profile = elid.Profile.Mini128
+///     >>> elid_str = elid.encode(embedding, profile)
+#[cfg(feature = "embeddings")]
+#[pyclass]
+#[derive(Clone, Copy, Debug)]
+pub enum Profile {
+    /// 128-bit SimHash encoding
+    Mini128,
+    /// Morton (Z-order) curve encoding with 10 dimensions x 10 bits
+    Morton10x10,
+    /// Hilbert curve encoding with 10 dimensions x 10 bits
+    Hilbert10x10,
+}
+
+#[cfg(feature = "embeddings")]
+impl From<Profile> for EmbedProfile {
+    fn from(p: Profile) -> Self {
+        match p {
+            Profile::Mini128 => EmbedProfile::Mini128 {
+                seed: 0x454c4944_53494d48, // Default "ELIDSIMH" seed
+            },
+            Profile::Morton10x10 => EmbedProfile::Morton10x10 {
+                dims: 10,
+                bits_per_dim: 10,
+                transform_id: None,
+            },
+            Profile::Hilbert10x10 => EmbedProfile::Hilbert10x10 {
+                dims: 10,
+                bits_per_dim: 10,
+                transform_id: None,
+            },
+        }
+    }
+}
+
+/// Encode an embedding vector to an ELID string.
+///
+/// Converts a high-dimensional embedding vector into a compact, sortable identifier
+/// using the specified profile. The resulting ELID preserves locality properties
+/// for efficient similarity search.
+///
+/// Args:
+///     embedding (numpy.ndarray): Input vector (f32, 64-2048 dimensions)
+///     profile (Profile): Encoding strategy (Mini128, Morton10x10, or Hilbert10x10)
+///
+/// Returns:
+///     str: Encoded ELID string
+///
+/// Raises:
+///     ValueError: If embedding dimensions are invalid or values contain NaN/Inf
+///
+/// Example:
+///     >>> import elid
+///     >>> import numpy as np
+///     >>> embedding = np.random.randn(768).astype(np.float32)
+///     >>> elid_str = elid.encode(embedding, elid.Profile.Mini128)
+///     >>> print(elid_str)  # e.g., "01a2b3c4d5e6f7g8h9i0..."
+#[cfg(feature = "embeddings")]
+#[pyfunction]
+#[pyo3(name = "encode")]
+fn encode_embedding(embedding: PyReadonlyArray1<f32>, profile: Profile) -> PyResult<String> {
+    let slice = embedding.as_slice()?;
+    embeddings::encode(slice, &EmbedProfile::from(profile))
+        .map(|elid| elid.to_string())
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+}
+
+/// Decode an ELID string to raw bytes.
+///
+/// Decodes a base32hex-encoded ELID string back to its raw byte representation.
+/// This returns the header bytes + payload bytes.
+///
+/// Args:
+///     elid_str (str): The ELID string to decode
+///
+/// Returns:
+///     bytes: Raw bytes (header + payload)
+///
+/// Raises:
+///     ValueError: If the ELID string contains invalid characters
+///
+/// Example:
+///     >>> import elid
+///     >>> raw_bytes = elid.decode("01a2b3c4d5e6f7...")
+///     >>> print(len(raw_bytes))  # 18 for Mini128 (2 header + 16 payload)
+#[cfg(feature = "embeddings")]
+#[pyfunction]
+#[pyo3(name = "decode")]
+fn decode_elid<'py>(py: Python<'py>, elid_str: &str) -> PyResult<Bound<'py, PyBytes>> {
+    // First create an Elid from the string
+    let elid = embeddings::types::Elid::from_string(elid_str.to_string())
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+
+    // Then decode to bytes
+    let bytes = embeddings::decode(&elid)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+
+    Ok(PyBytes::new(py, &bytes))
+}
+
+/// Compute Hamming distance between two ELID strings.
+///
+/// Returns the number of differing bits in the SimHash payloads of two ELIDs.
+/// This distance is proportional to the angular distance between the original
+/// embeddings. Both ELIDs must use the Mini128 profile.
+///
+/// Args:
+///     elid1 (str): First ELID string
+///     elid2 (str): Second ELID string
+///
+/// Returns:
+///     int: Hamming distance (0-128)
+///
+/// Raises:
+///     ValueError: If either ELID is invalid or uses a non-Mini128 profile
+///
+/// Example:
+///     >>> import elid
+///     >>> import numpy as np
+///     >>> emb1 = np.random.randn(768).astype(np.float32)
+///     >>> emb2 = emb1 + np.random.randn(768).astype(np.float32) * 0.1  # Similar
+///     >>> elid1 = elid.encode(emb1, elid.Profile.Mini128)
+///     >>> elid2 = elid.encode(emb2, elid.Profile.Mini128)
+///     >>> distance = elid.elid_hamming_distance(elid1, elid2)
+///     >>> print(f"Distance: {distance}")  # Low number = similar embeddings
+#[cfg(feature = "embeddings")]
+#[pyfunction]
+fn elid_hamming_distance(elid1: &str, elid2: &str) -> PyResult<u32> {
+    // Create Elid objects from strings
+    let a = embeddings::types::Elid::from_string(elid1.to_string())
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+    let b = embeddings::types::Elid::from_string(elid2.to_string())
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))?;
+
+    embeddings::hamming_distance(&a, &b)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
 }
 
 /// ELID - Efficient Levenshtein and String Similarity Library
@@ -388,6 +546,7 @@ fn find_similar_hashes(
 /// A fast library for computing various string similarity metrics.
 #[pymodule]
 fn elid(m: &Bound<'_, PyModule>) -> PyResult<()> {
+    // String similarity functions
     m.add_function(wrap_pyfunction!(levenshtein, m)?)?;
     m.add_function(wrap_pyfunction!(normalized_levenshtein, m)?)?;
     m.add_function(wrap_pyfunction!(jaro, m)?)?;
@@ -403,6 +562,15 @@ fn elid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(simhash_similarity, m)?)?;
     m.add_function(wrap_pyfunction!(find_similar_hashes, m)?)?;
     m.add_class::<SimilarityOpts>()?;
+
+    // Embedding functions (feature-gated)
+    #[cfg(feature = "embeddings")]
+    {
+        m.add_function(wrap_pyfunction!(encode_embedding, m)?)?;
+        m.add_function(wrap_pyfunction!(decode_elid, m)?)?;
+        m.add_function(wrap_pyfunction!(elid_hamming_distance, m)?)?;
+        m.add_class::<Profile>()?;
+    }
 
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 

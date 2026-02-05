@@ -3,11 +3,11 @@ name = "elid"
 version = "0.0.0-dev"
 edition = "2021"
 authors = ["Zach Handley <zachhandley@gmail.com>"]
-description = "A fast and efficient string similarity library"
+description = "Embedding Locality IDentifier - encode embeddings into sortable string IDs for vector search without vector stores, plus fast string similarity algorithms"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/ZachHandley/ELID"
-keywords = ["string", "similarity", "levenshtein", "fuzzy", "distance"]
-categories = ["algorithms", "text-processing"]
+keywords = ["embeddings", "vector-search", "similarity", "levenshtein", "locality-sensitive-hashing"]
+categories = ["algorithms", "text-processing", "encoding", "science"]
 
 [lib]
 name = "elid"
@@ -15,10 +15,18 @@ path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-default = []
-wasm = ["wasm-bindgen", "js-sys", "serde", "serde-wasm-bindgen", "serde_json"]
-python = ["pyo3"]
-ffi = []
+default = ["strings"]
+strings = []                  # Zero-dependency string similarity (current behavior)
+embeddings = [                # Vector encoding
+  "dep:rand", "dep:rand_chacha", "dep:rand_distr",
+  "dep:blake3", "dep:data-encoding", "dep:once_cell",
+  "dep:thiserror", "dep:serde"
+]
+wasm = ["strings", "dep:wasm-bindgen", "dep:js-sys", "dep:serde", "dep:serde-wasm-bindgen", "dep:serde_json"]
+wasm-embeddings = ["wasm", "embeddings", "dep:getrandom"]
+python = ["strings", "dep:pyo3"]
+python-embeddings = ["python", "embeddings", "dep:numpy", "dep:rayon"]
+ffi = ["strings"]
 
 [dependencies]
 # No external dependencies for core algorithms - pure Rust implementation
@@ -27,9 +35,19 @@ js-sys = { version = "0.3", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde-wasm-bindgen = { version = "0.6", optional = true }
 serde_json = { version = "1.0", optional = true }
+rand = { version = "0.8", optional = true }
+rand_chacha = { version = "0.3", optional = true }
+rand_distr = { version = "0.4", optional = true }
+blake3 = { version = "1.5", optional = true }
+data-encoding = { version = "2.5", optional = true }
+once_cell = { version = "1.19", optional = true }
+thiserror = { version = "1.0", optional = true }
+rayon = { version = "1.8", optional = true }
+getrandom = { version = "0.2", features = ["js"], optional = true }
+numpy = { version = "0.27", optional = true }
 
 [dependencies.pyo3]
-version = "0.22"
+version = "0.27"
 features = ["extension-module"]
 optional = true
 
