@@ -602,10 +602,7 @@ pub use embeddings_ffi::*;
 /// - The returned array must be freed with `elid_free_embedding()`.
 #[cfg(feature = "models-text")]
 #[no_mangle]
-pub unsafe extern "C" fn elid_embed_text(
-    text: *const c_char,
-    out_len: *mut usize,
-) -> *mut f32 {
+pub unsafe extern "C" fn elid_embed_text(text: *const c_char, out_len: *mut usize) -> *mut f32 {
     if text.is_null() || out_len.is_null() {
         return std::ptr::null_mut();
     }
@@ -988,7 +985,8 @@ mod embeddings_tests {
             // Verify bands are base32hex encoded (lowercase alphanumeric)
             for band in &band_vec {
                 assert!(
-                    band.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()),
+                    band.chars()
+                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit()),
                     "Band should be base32hex encoded: {}",
                     band
                 );
@@ -1058,7 +1056,10 @@ mod embeddings_tests {
 
             let str1 = CStr::from_ptr(bands1).to_str().unwrap();
             let str2 = CStr::from_ptr(bands2).to_str().unwrap();
-            assert_eq!(str1, str2, "Same embedding and seed should produce same bands");
+            assert_eq!(
+                str1, str2,
+                "Same embedding and seed should produce same bands"
+            );
 
             elid_free_string(bands1);
             elid_free_string(bands2);

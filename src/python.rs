@@ -1038,11 +1038,7 @@ fn embed_image(image_bytes: &[u8]) -> PyResult<Vec<f32>> {
 #[cfg(feature = "embeddings")]
 #[pyfunction]
 #[pyo3(name = "embedding_to_bands", signature = (embedding, num_bands=4, seed=None))]
-fn embedding_to_bands_py(
-    embedding: Vec<f32>,
-    num_bands: u8,
-    seed: Option<u64>,
-) -> Vec<String> {
+fn embedding_to_bands_py(embedding: Vec<f32>, num_bands: u8, seed: Option<u64>) -> Vec<String> {
     let seed = seed.unwrap_or(0x454c4944_53494d48); // Default "ELIDSIMH" seed
     crate::embeddings::embedding_to_bands(&embedding, num_bands, seed)
 }

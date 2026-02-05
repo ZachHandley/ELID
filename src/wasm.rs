@@ -893,11 +893,7 @@ pub fn encode_elid_cross_dimensional(
 /// ```
 #[cfg(feature = "embeddings")]
 #[wasm_bindgen(js_name = embeddingToBands)]
-pub fn embedding_to_bands_wasm(
-    embedding: &[f64],
-    num_bands: u8,
-    seed: Option<u64>,
-) -> Vec<String> {
+pub fn embedding_to_bands_wasm(embedding: &[f64], num_bands: u8, seed: Option<u64>) -> Vec<String> {
     // Convert f64 to f32 (JS uses f64 for all numbers)
     let embedding_f32: Vec<f32> = embedding.iter().map(|&x| x as f32).collect();
 
@@ -954,9 +950,9 @@ pub fn mini128_to_bands_wasm(hash: &[u8], num_bands: u8) -> Result<Vec<String>, 
     }
 
     // Convert slice to fixed-size array
-    let hash_array: [u8; 16] = hash.try_into().map_err(|_| {
-        JsValue::from_str("Failed to convert hash to 16-byte array")
-    })?;
+    let hash_array: [u8; 16] = hash
+        .try_into()
+        .map_err(|_| JsValue::from_str("Failed to convert hash to 16-byte array"))?;
 
     Ok(embeddings::mini128_to_bands(&hash_array, num_bands))
 }
