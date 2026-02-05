@@ -148,13 +148,41 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Build wheel
+      - name: Build base wheel (elid)
         run: uv run maturin build --release --features python --out dist
 
-      - name: Upload Python wheel
+      - name: Build elid-text wheel
+        run: |
+          # Modify pyproject.toml for elid-text
+          cp pyproject.toml pyproject.toml.bak
+          sed -i 's/name = "elid"/name = "elid-text"/' pyproject.toml
+          sed -i 's/description = ".*"/description = "ELID with text embedding models (Model2Vec)"/' pyproject.toml
+          uv run maturin build --release --features "python,models-text" --out dist
+          mv pyproject.toml.bak pyproject.toml
+        continue-on-error: true
+
+      - name: Build elid-image wheel
+        run: |
+          cp pyproject.toml pyproject.toml.bak
+          sed -i 's/name = "elid"/name = "elid-image"/' pyproject.toml
+          sed -i 's/description = ".*"/description = "ELID with image embedding models (MobileNetV3)"/' pyproject.toml
+          uv run maturin build --release --features "python,models-image" --out dist
+          mv pyproject.toml.bak pyproject.toml
+        continue-on-error: true
+
+      - name: Build elid-all wheel
+        run: |
+          cp pyproject.toml pyproject.toml.bak
+          sed -i 's/name = "elid"/name = "elid-all"/' pyproject.toml
+          sed -i 's/description = ".*"/description = "ELID with text and image embedding models"/' pyproject.toml
+          uv run maturin build --release --features "python,models-text,models-image" --out dist
+          mv pyproject.toml.bak pyproject.toml
+        continue-on-error: true
+
+      - name: Upload Python wheels
         uses: https://github.com/christopherhx/gitea-upload-artifact@v4
         with:
-          name: python-wheel
+          name: python-wheels
           path: dist/*.whl
           retention-days: 7
 
@@ -175,7 +203,7 @@ jobs:
       - name: Download Python wheel
         uses: https://github.com/christopherhx/gitea-download-artifact@v4
         with:
-          name: python-wheel
+          name: python-wheels
           path: artifacts/python
 
       - name: Create Forgejo release
@@ -430,7 +458,7 @@ jobs:
       - name: Download Python wheel
         uses: https://github.com/christopherhx/gitea-download-artifact@v4
         with:
-          name: python-wheel
+          name: python-wheels
           path: dist
 
       - name: Publish to PyPI
