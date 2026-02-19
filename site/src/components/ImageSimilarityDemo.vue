@@ -82,7 +82,8 @@ function getBands(embedding: Float64Array): string[] {
 function initializeImages(): void {
   const imageList: ImageData[] = [];
   for (let i = 1; i <= 12; i++) {
-    const url = `/demo-images/img${i}.jpg`;
+    const base = (import.meta.env.BASE_URL ?? "/").replace(/\/?$/, "/");
+    const url = `${base}demo-images/img${i}.jpg`;
     const embedding = generateFakeEmbedding(url);
     const bands = getBands(embedding);
     imageList.push({ url, embedding, bands });
