@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Rust
-        uses: https://forge.blackleafdigital.com/BlackLeafDigital/actions/setup-rust@main
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
 
       - name: Build docs
         run: cargo doc --features ffi,wasm --no-deps
@@ -58,7 +58,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Rust
-        uses: https://forge.blackleafdigital.com/BlackLeafDigital/actions/setup-rust@main
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
 
       - name: Build with FFI
         run: cargo build --release --features ffi
@@ -78,12 +78,12 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Rust
-        uses: https://forge.blackleafdigital.com/BlackLeafDigital/actions/setup-rust@main
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
         with:
           targets: wasm32-unknown-unknown
 
       - name: Setup Node.js
-        uses: https://forge.blackleafdigital.com/BlackLeafDigital/actions/setup-node@main
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-node@main
         with:
           node-version: '22'
 
