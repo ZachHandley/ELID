@@ -1,5 +1,5 @@
 {
-  "name": "elid-wasm",
+  "name": "@elid/core",
   "version": "0.0.0-dev",
   "description": "Embedding Locality IDentifier - encode embeddings into sortable string IDs for vector search, plus fast string similarity algorithms (WASM)",
   "main": "pkg/elid.js",

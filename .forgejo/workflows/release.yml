@@ -218,7 +218,7 @@ jobs:
           ### Installation
           - **Rust**: \`cargo add elid\`
           - **Python**: \`pip install elid\`
-          - **WASM/JS**: \`npm install elid-wasm\`
+          - **WASM/JS**: \`npm install @elid/core\`
 
           ### Embedding Encoding (NEW)
           - Lossless, compressed, or max-length encoding
@@ -345,8 +345,9 @@ jobs:
           pnpm install
           pnpm run build
           cd pkg
+          sed -i 's/"name": "elid"/"name": "@elid\/core"/' package.json
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
-          pnpm publish --no-git-checks
+          pnpm publish --no-git-checks --access public
 
   publish-npm-embedtext:
     name: Publish elid-embedtext to npm
@@ -371,12 +372,12 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Build and publish elid-embedtext
+      - name: Build and publish @elid/text
         run: |
           pnpm install
           pnpm exec wasm-pack build --target bundler --out-dir pkg-embedtext -- --features "wasm,models-text"
           cd pkg-embedtext
-          sed -i 's/"name": "elid-wasm"/"name": "elid-embedtext"/' package.json
+          sed -i 's/"name": "elid"/"name": "@elid\/text"/' package.json
           sed -i 's/"description": ".*"/"description": "ELID with text embedding models (Model2Vec potion-base-8M)"/' package.json
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
           pnpm publish --no-git-checks --access public
@@ -404,12 +405,12 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Build and publish elid-embedimage
+      - name: Build and publish @elid/image
         run: |
           pnpm install
           pnpm exec wasm-pack build --target bundler --out-dir pkg-embedimage -- --features "wasm,models-image"
           cd pkg-embedimage
-          sed -i 's/"name": "elid-wasm"/"name": "elid-embedimage"/' package.json
+          sed -i 's/"name": "elid"/"name": "@elid\/image"/' package.json
           sed -i 's/"description": ".*"/"description": "ELID with image embedding models (MobileNetV3-Small)"/' package.json
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
           pnpm publish --no-git-checks --access public
@@ -437,12 +438,12 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Build and publish elid-both
+      - name: Build and publish @elid/both
         run: |
           pnpm install
           pnpm exec wasm-pack build --target bundler --out-dir pkg-both -- --features "wasm,models-text,models-image"
           cd pkg-both
-          sed -i 's/"name": "elid-wasm"/"name": "elid-both"/' package.json
+          sed -i 's/"name": "elid"/"name": "@elid\/both"/' package.json
           sed -i 's/"description": ".*"/"description": "ELID with text and image embedding models (Model2Vec + MobileNetV3)"/' package.json
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
           pnpm publish --no-git-checks --access public
