@@ -89,24 +89,21 @@ jobs:
 
       - name: Build ELID-embedtext WASM variants
         run: |
-          wasm-pack build --target bundler --out-dir pkg-embedtext -- --features "wasm,models-text"
-          wasm-pack build --target nodejs --out-dir pkg-embedtext-node -- --features "wasm,models-text"
-          wasm-pack build --target web --out-dir pkg-embedtext-web -- --features "wasm,models-text"
-        continue-on-error: true
+          npx wasm-pack build --target bundler --out-dir pkg-embedtext -- --features "wasm,models-text"
+          npx wasm-pack build --target nodejs --out-dir pkg-embedtext-node -- --features "wasm,models-text"
+          npx wasm-pack build --target web --out-dir pkg-embedtext-web -- --features "wasm,models-text"
 
       - name: Build ELID-embedimage WASM variants
         run: |
-          wasm-pack build --target bundler --out-dir pkg-embedimage -- --features "wasm,models-image"
-          wasm-pack build --target nodejs --out-dir pkg-embedimage-node -- --features "wasm,models-image"
-          wasm-pack build --target web --out-dir pkg-embedimage-web -- --features "wasm,models-image"
-        continue-on-error: true
+          npx wasm-pack build --target bundler --out-dir pkg-embedimage -- --features "wasm,models-image"
+          npx wasm-pack build --target nodejs --out-dir pkg-embedimage-node -- --features "wasm,models-image"
+          npx wasm-pack build --target web --out-dir pkg-embedimage-web -- --features "wasm,models-image"
 
       - name: Build ELID-both WASM variants (text + image)
         run: |
-          wasm-pack build --target bundler --out-dir pkg-both -- --features "wasm,models-text,models-image"
-          wasm-pack build --target nodejs --out-dir pkg-both-node -- --features "wasm,models-text,models-image"
-          wasm-pack build --target web --out-dir pkg-both-web -- --features "wasm,models-text,models-image"
-        continue-on-error: true
+          npx wasm-pack build --target bundler --out-dir pkg-both -- --features "wasm,models-text,models-image"
+          npx wasm-pack build --target nodejs --out-dir pkg-both-node -- --features "wasm,models-text,models-image"
+          npx wasm-pack build --target web --out-dir pkg-both-web -- --features "wasm,models-text,models-image"
 
       - name: Package WASM artifacts
         run: |
@@ -169,7 +166,6 @@ jobs:
           sed -i 's/description = ".*"/description = "ELID with text embedding models (Model2Vec)"/' pyproject.toml
           uv run maturin build --release --features "python,models-text" --out dist
           mv pyproject.toml.bak pyproject.toml
-        continue-on-error: true
 
       - name: Build elid-image wheel
         run: |
@@ -178,7 +174,6 @@ jobs:
           sed -i 's/description = ".*"/description = "ELID with image embedding models (MobileNetV3)"/' pyproject.toml
           uv run maturin build --release --features "python,models-image" --out dist
           mv pyproject.toml.bak pyproject.toml
-        continue-on-error: true
 
       - name: Build elid-all wheel
         run: |
@@ -187,7 +182,6 @@ jobs:
           sed -i 's/description = ".*"/description = "ELID with text and image embedding models"/' pyproject.toml
           uv run maturin build --release --features "python,models-text,models-image" --out dist
           mv pyproject.toml.bak pyproject.toml
-        continue-on-error: true
 
       - name: Upload Python wheels
         uses: https://github.com/christopherhx/gitea-upload-artifact@v4
@@ -321,8 +315,7 @@ jobs:
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
 
       - name: Publish to crates.io
-        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
-        continue-on-error: true
+        run: cargo publish --allow-dirty --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
 
   publish-npm:
     name: Publish to npm
@@ -355,7 +348,6 @@ jobs:
           cd pkg
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
           npm publish
-        continue-on-error: true
 
   publish-npm-embedtext:
     name: Publish elid-embedtext to npm
@@ -383,13 +375,12 @@ jobs:
       - name: Build and publish elid-embedtext
         run: |
           npm install
-          wasm-pack build --target bundler --out-dir pkg-embedtext -- --features "wasm,models-text"
+          npx wasm-pack build --target bundler --out-dir pkg-embedtext -- --features "wasm,models-text"
           cd pkg-embedtext
           sed -i 's/"name": "elid-wasm"/"name": "elid-embedtext"/' package.json
           sed -i 's/"description": ".*"/"description": "ELID with text embedding models (Model2Vec potion-base-8M)"/' package.json
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
           npm publish --access public
-        continue-on-error: true
 
   publish-npm-embedimage:
     name: Publish elid-embedimage to npm
@@ -417,13 +408,12 @@ jobs:
       - name: Build and publish elid-embedimage
         run: |
           npm install
-          wasm-pack build --target bundler --out-dir pkg-embedimage -- --features "wasm,models-image"
+          npx wasm-pack build --target bundler --out-dir pkg-embedimage -- --features "wasm,models-image"
           cd pkg-embedimage
           sed -i 's/"name": "elid-wasm"/"name": "elid-embedimage"/' package.json
           sed -i 's/"description": ".*"/"description": "ELID with image embedding models (MobileNetV3-Small)"/' package.json
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
           npm publish --access public
-        continue-on-error: true
 
   publish-npm-both:
     name: Publish elid-both to npm
@@ -451,13 +441,12 @@ jobs:
       - name: Build and publish elid-both
         run: |
           npm install
-          wasm-pack build --target bundler --out-dir pkg-both -- --features "wasm,models-text,models-image"
+          npx wasm-pack build --target bundler --out-dir pkg-both -- --features "wasm,models-text,models-image"
           cd pkg-both
           sed -i 's/"name": "elid-wasm"/"name": "elid-both"/' package.json
           sed -i 's/"description": ".*"/"description": "ELID with text and image embedding models (Model2Vec + MobileNetV3)"/' package.json
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
           npm publish --access public
-        continue-on-error: true
 
   publish-pypi:
     name: Publish to PyPI
@@ -480,4 +469,3 @@ jobs:
 
       - name: Publish to PyPI
         run: uvx twine upload dist/*.whl -u __token__ -p ${{ secrets.PYPI_TOKEN }}
-        continue-on-error: true
