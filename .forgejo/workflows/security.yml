@@ -50,6 +50,9 @@ jobs:
           [ -f LICENSE-MIT ] && echo "LICENSE-MIT exists"
           [ -f LICENSE-APACHE ] && echo "LICENSE-APACHE exists"
 
+      - name: Setup Rust
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+
       - name: Check dependency tree
         run: |
           cargo install cargo-license

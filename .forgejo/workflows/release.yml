@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (e.g., v1.0.0)'
+        description: 'Version to release (e.g., 1.0.0 or v1.0.0)'
         required: false
         type: string
 
@@ -22,13 +22,25 @@ jobs:
   build-test:
     name: Build & Test
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.stamp.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Stamp version
-        if: startsWith(github.ref, 'refs/tags/')
+        id: stamp
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          elif [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+            VERSION="${VERSION#v}"
+          else
+            echo "::error::No version. Push a v* tag or set the version input."
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Stamping version: $VERSION"
           sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json pyproject.toml README.md
           sed -i "s/0\.0\.0-dev/${VERSION}/g" src/ffi.rs
 
@@ -54,9 +66,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Stamp version
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${{ needs.build-test.outputs.version }}"
           sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json pyproject.toml README.md
           sed -i "s/0\.0\.0-dev/${VERSION}/g" src/ffi.rs
 
@@ -134,9 +145,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Stamp version
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${{ needs.build-test.outputs.version }}"
           sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json pyproject.toml README.md
           sed -i "s/0\.0\.0-dev/${VERSION}/g" src/ffi.rs
 
@@ -189,8 +199,8 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [build-wasm, build-python]
-    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build-test, build-wasm, build-python]
+    if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
     steps:
       - uses: actions/checkout@v4
 
@@ -208,7 +218,8 @@ jobs:
 
       - name: Create Forgejo release
         run: |
-          TAG="${GITHUB_REF_NAME}"
+          VERSION="${{ needs.build-test.outputs.version }}"
+          TAG="v${VERSION}"
           BODY="## ELID ${TAG}
 
           **Embedding Locality IDentifier** - Vector search without vector stores, plus fast string similarity.
@@ -229,6 +240,14 @@ jobs:
           - Best match finder
           "
 
+          # Create tag if this was a workflow_dispatch (no tag exists yet)
+          if [[ "$GITHUB_REF" != refs/tags/* ]]; then
+            git config user.name "Forgejo CI"
+            git config user.email "ci@forge.blackleafdigital.com"
+            git tag -a "$TAG" -m "Release ELID $VERSION"
+            git push origin "$TAG" || true
+          fi
+
           # Create release via Forgejo API
           curl -X POST \
             -H "Authorization: token ${{ secrets.FORGEJO_TOKEN }}" \
@@ -240,16 +259,15 @@ jobs:
     name: Sync to GitHub
     runs-on: ubuntu-latest
     needs: [build-test]
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
       - name: Stamp version
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${{ needs.build-test.outputs.version }}"
           sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json pyproject.toml README.md
           sed -i "s/0\.0\.0-dev/${VERSION}/g" src/ffi.rs
 
@@ -266,8 +284,8 @@ jobs:
 
       - name: Update README for GitHub
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          VERSION="${TAG#v}"
+          VERSION="${{ needs.build-test.outputs.version }}"
+          TAG="v${VERSION}"
           sed -i "s|elid = \"[0-9]*\.[0-9]*\.[0-9]*\"|elid = \"${VERSION}\"|g" README.md
           sed -i 's|https://forge.blackleafdigital.com/BlackLeafDigital/ELID|https://github.com/zachhandley/elid|g' README.md
           sed -i "s|forge.blackleafdigital.com/BlackLeafDigital/ELID/actions/workflows/ci.yml/badge.svg|github.com/zachhandley/elid/actions/workflows/ci.yml/badge.svg|g" README.md
@@ -275,12 +293,13 @@ jobs:
 
       - name: Commit and push to GitHub
         run: |
+          VERSION="${{ needs.build-test.outputs.version }}"
+          TAG="v${VERSION}"
           git config user.name "Zach Handley"
           git config user.email "zachhandley@gmail.com"
           git add -A
-          git commit -m "Release ${GITHUB_REF_NAME} with GitHub Actions workflows"
+          git commit -m "Release ${TAG} with GitHub Actions workflows"
           git remote add github https://x-access-token:${{ secrets.GH_ACCESS_TOKEN }}@github.com/zachhandley/elid.git
-          TAG="${GITHUB_REF_NAME}"
           git push github "refs/tags/${TAG}" --force
           git push github "HEAD:refs/heads/releases" --force
 
@@ -288,14 +307,13 @@ jobs:
     name: Publish to crates.io
     runs-on: ubuntu-latest
     needs: [build-test]
-    if: startsWith(github.ref, 'refs/tags/')
+    if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
     steps:
       - uses: actions/checkout@v4
 
       - name: Stamp version
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${{ needs.build-test.outputs.version }}"
           sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json pyproject.toml README.md
           sed -i "s/0\.0\.0-dev/${VERSION}/g" src/ffi.rs
 
@@ -309,15 +327,14 @@ jobs:
   publish-npm:
     name: Publish to npm
     runs-on: ubuntu-latest
-    needs: [build-wasm]
-    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build-test, build-wasm]
+    if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
     steps:
       - uses: actions/checkout@v4
 
       - name: Stamp version
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${{ needs.build-test.outputs.version }}"
           sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json pyproject.toml README.md
           sed -i "s/0\.0\.0-dev/${VERSION}/g" src/ffi.rs
 
@@ -343,14 +360,14 @@ jobs:
   publish-npm-embedtext:
     name: Publish elid-embedtext to npm
     runs-on: ubuntu-latest
-    needs: [build-wasm]
-    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build-test, build-wasm]
+    if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
     steps:
       - uses: actions/checkout@v4
 
       - name: Stamp version
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${{ needs.build-test.outputs.version }}"
           sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json
 
       - name: Setup Rust
@@ -377,14 +394,14 @@ jobs:
   publish-npm-embedimage:
     name: Publish elid-embedimage to npm
     runs-on: ubuntu-latest
-    needs: [build-wasm]
-    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build-test, build-wasm]
+    if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
     steps:
       - uses: actions/checkout@v4
 
       - name: Stamp version
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${{ needs.build-test.outputs.version }}"
           sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json
 
       - name: Setup Rust
@@ -411,14 +428,14 @@ jobs:
   publish-npm-both:
     name: Publish elid-both to npm
     runs-on: ubuntu-latest
-    needs: [build-wasm]
-    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build-test, build-wasm]
+    if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
     steps:
       - uses: actions/checkout@v4
 
       - name: Stamp version
         run: |
-          VERSION="${GITHUB_REF_NAME#v}"
+          VERSION="${{ needs.build-test.outputs.version }}"
           sed -i "s/0\.0\.0-dev/${VERSION}/g" Cargo.toml package.json
 
       - name: Setup Rust
@@ -445,8 +462,8 @@ jobs:
   publish-pypi:
     name: Publish to PyPI
     runs-on: ubuntu-latest
-    needs: [build-python]
-    if: startsWith(github.ref, 'refs/tags/')
+    needs: [build-test, build-python]
+    if: startsWith(github.ref, 'refs/tags/') || inputs.version != ''
     steps:
       - uses: actions/checkout@v4
 
