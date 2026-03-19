@@ -148,13 +148,13 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm install
+        run: pnpm install
 
       - name: Build all WASM targets
-        run: npm run build:all
+        run: pnpm run build:all
 
       - name: Run WASM tests
-        run: npm run test:all
+        run: pnpm run test:all
 
       - name: Verify WASM file sizes
         run: |

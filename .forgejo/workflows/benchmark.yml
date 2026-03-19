@@ -69,12 +69,10 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm install
+        run: pnpm install
 
       - name: Build WASM
-        run: |
-          npm install
-          npm run build:node
+        run: pnpm run build:node
 
       - name: Check WASM size
         run: |

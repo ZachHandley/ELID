@@ -82,28 +82,28 @@ jobs:
           node-version: '22'
 
       - name: Install dependencies
-        run: npm install
+        run: pnpm install
 
       - name: Build all WASM targets
-        run: npm run build:all
+        run: pnpm run build:all
 
       - name: Build ELID-embedtext WASM variants
         run: |
-          npx wasm-pack build --target bundler --out-dir pkg-embedtext -- --features "wasm,models-text"
-          npx wasm-pack build --target nodejs --out-dir pkg-embedtext-node -- --features "wasm,models-text"
-          npx wasm-pack build --target web --out-dir pkg-embedtext-web -- --features "wasm,models-text"
+          pnpm exec wasm-pack build --target bundler --out-dir pkg-embedtext -- --features "wasm,models-text"
+          pnpm exec wasm-pack build --target nodejs --out-dir pkg-embedtext-node -- --features "wasm,models-text"
+          pnpm exec wasm-pack build --target web --out-dir pkg-embedtext-web -- --features "wasm,models-text"
 
       - name: Build ELID-embedimage WASM variants
         run: |
-          npx wasm-pack build --target bundler --out-dir pkg-embedimage -- --features "wasm,models-image"
-          npx wasm-pack build --target nodejs --out-dir pkg-embedimage-node -- --features "wasm,models-image"
-          npx wasm-pack build --target web --out-dir pkg-embedimage-web -- --features "wasm,models-image"
+          pnpm exec wasm-pack build --target bundler --out-dir pkg-embedimage -- --features "wasm,models-image"
+          pnpm exec wasm-pack build --target nodejs --out-dir pkg-embedimage-node -- --features "wasm,models-image"
+          pnpm exec wasm-pack build --target web --out-dir pkg-embedimage-web -- --features "wasm,models-image"
 
       - name: Build ELID-both WASM variants (text + image)
         run: |
-          npx wasm-pack build --target bundler --out-dir pkg-both -- --features "wasm,models-text,models-image"
-          npx wasm-pack build --target nodejs --out-dir pkg-both-node -- --features "wasm,models-text,models-image"
-          npx wasm-pack build --target web --out-dir pkg-both-web -- --features "wasm,models-text,models-image"
+          pnpm exec wasm-pack build --target bundler --out-dir pkg-both -- --features "wasm,models-text,models-image"
+          pnpm exec wasm-pack build --target nodejs --out-dir pkg-both-node -- --features "wasm,models-text,models-image"
+          pnpm exec wasm-pack build --target web --out-dir pkg-both-web -- --features "wasm,models-text,models-image"
 
       - name: Package WASM artifacts
         run: |
@@ -343,11 +343,11 @@ jobs:
 
       - name: Build and publish WASM
         run: |
-          npm install
-          npm run build
+          pnpm install
+          pnpm run build
           cd pkg
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
-          npm publish
+          pnpm publish --no-git-checks
 
   publish-npm-embedtext:
     name: Publish elid-embedtext to npm
@@ -374,13 +374,13 @@ jobs:
 
       - name: Build and publish elid-embedtext
         run: |
-          npm install
-          npx wasm-pack build --target bundler --out-dir pkg-embedtext -- --features "wasm,models-text"
+          pnpm install
+          pnpm exec wasm-pack build --target bundler --out-dir pkg-embedtext -- --features "wasm,models-text"
           cd pkg-embedtext
           sed -i 's/"name": "elid-wasm"/"name": "elid-embedtext"/' package.json
           sed -i 's/"description": ".*"/"description": "ELID with text embedding models (Model2Vec potion-base-8M)"/' package.json
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
-          npm publish --access public
+          pnpm publish --no-git-checks --access public
 
   publish-npm-embedimage:
     name: Publish elid-embedimage to npm
@@ -407,13 +407,13 @@ jobs:
 
       - name: Build and publish elid-embedimage
         run: |
-          npm install
-          npx wasm-pack build --target bundler --out-dir pkg-embedimage -- --features "wasm,models-image"
+          pnpm install
+          pnpm exec wasm-pack build --target bundler --out-dir pkg-embedimage -- --features "wasm,models-image"
           cd pkg-embedimage
           sed -i 's/"name": "elid-wasm"/"name": "elid-embedimage"/' package.json
           sed -i 's/"description": ".*"/"description": "ELID with image embedding models (MobileNetV3-Small)"/' package.json
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
-          npm publish --access public
+          pnpm publish --no-git-checks --access public
 
   publish-npm-both:
     name: Publish elid-both to npm
@@ -440,13 +440,13 @@ jobs:
 
       - name: Build and publish elid-both
         run: |
-          npm install
-          npx wasm-pack build --target bundler --out-dir pkg-both -- --features "wasm,models-text,models-image"
+          pnpm install
+          pnpm exec wasm-pack build --target bundler --out-dir pkg-both -- --features "wasm,models-text,models-image"
           cd pkg-both
           sed -i 's/"name": "elid-wasm"/"name": "elid-both"/' package.json
           sed -i 's/"description": ".*"/"description": "ELID with text and image embedding models (Model2Vec + MobileNetV3)"/' package.json
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > .npmrc
-          npm publish --access public
+          pnpm publish --no-git-checks --access public
 
   publish-pypi:
     name: Publish to PyPI
