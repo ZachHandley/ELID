@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+    tags:
+      - 'v*.*.*'
   pull_request:
     branches: [main]
 
@@ -219,3 +221,18 @@ jobs:
             -H "Content-Type: application/json" \
             "${{ github.server_url }}/api/v1/repos/${{ github.repository }}/actions/workflows/docs.yml/dispatches" \
             -d '{"ref": "main"}'
+
+  trigger-release:
+    name: Trigger Release
+    runs-on: ubuntu-latest
+    needs: [test, test-ffi, test-wasm, test-python]
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Dispatch release workflow
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          curl -X POST \
+            -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "${{ github.server_url }}/api/v1/repos/${{ github.repository }}/actions/workflows/release.yml/dispatches" \
+            -d "{\"ref\": \"main\", \"inputs\": {\"version\": \"${VERSION}\"}}"
