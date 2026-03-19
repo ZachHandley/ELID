@@ -6,7 +6,7 @@ authors = ["Zach Handley <zachhandley@gmail.com>"]
 description = "Embedding Locality IDentifier - encode embeddings into sortable string IDs for vector search without vector stores, plus fast string similarity algorithms"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/ZachHandley/ELID"
-keywords = ["embeddings", "vector-search", "similarity", "levenshtein", "locality-sensitive-hashing"]
+keywords = ["embeddings", "vector-search", "similarity", "levenshtein", "fuzzy-search"]
 categories = ["algorithms", "text-processing", "encoding", "science"]
 
 [lib]
