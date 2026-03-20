@@ -162,7 +162,7 @@ jobs:
           python-version: '3.12'
 
       - name: Build base wheel (elid)
-        run: uv run --no-project maturin build --release --features python --out dist
+        run: uv run maturin build --release --features python --out dist
 
       - name: Build elid-text wheel
         run: |
@@ -170,7 +170,7 @@ jobs:
           cp pyproject.toml pyproject.toml.bak
           sed -i 's/^name = "elid"/name = "elid-text"/' pyproject.toml
           sed -i 's/description = ".*"/description = "ELID with text embedding models (Model2Vec)"/' pyproject.toml
-          uv run --no-project maturin build --release --features "python,models-text" --out dist
+          uv run maturin build --release --features "python,models-text" --out dist
           mv pyproject.toml.bak pyproject.toml
 
       - name: Build elid-image wheel
@@ -178,7 +178,7 @@ jobs:
           cp pyproject.toml pyproject.toml.bak
           sed -i 's/^name = "elid"/name = "elid-image"/' pyproject.toml
           sed -i 's/description = ".*"/description = "ELID with image embedding models (MobileNetV3)"/' pyproject.toml
-          uv run --no-project maturin build --release --features "python,models-image" --out dist
+          uv run maturin build --release --features "python,models-image" --out dist
           mv pyproject.toml.bak pyproject.toml
 
       - name: Build elid-all wheel
@@ -186,7 +186,7 @@ jobs:
           cp pyproject.toml pyproject.toml.bak
           sed -i 's/^name = "elid"/name = "elid-all"/' pyproject.toml
           sed -i 's/description = ".*"/description = "ELID with text and image embedding models"/' pyproject.toml
-          uv run --no-project maturin build --release --features "python,models-text,models-image" --out dist
+          uv run maturin build --release --features "python,models-text,models-image" --out dist
           mv pyproject.toml.bak pyproject.toml
 
       - name: Upload Python wheels

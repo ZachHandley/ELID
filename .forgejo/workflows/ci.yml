@@ -169,13 +169,13 @@ jobs:
           python-version: '3.12'
 
       - name: Build Python wheel
-        run: uv run --no-project maturin build --release --features python --out dist
+        run: uv run maturin build --release --features python --out dist
 
       - name: Install wheel
         run: uv pip install dist/elid-*.whl
 
       - name: Run Python tests
-        run: uv run --no-project python tests/python/test_bindings.py
+        run: uv run python tests/python/test_bindings.py
 
   trigger-docs:
     name: Trigger Documentation Build
