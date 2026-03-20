@@ -88,7 +88,14 @@ interface ElidWasmModule {
     b: string,
     opts: SimilarityOptions
   ) => number;
-  // Embedding functions (feature-gated in WASM)
+  // Model embedding functions (feature-gated)
+  initTextModel?: () => Promise<void>;
+  initImageModel?: () => Promise<void>;
+  embedText?: (text: string) => Float32Array;
+  embedImage?: (imageBytes: Uint8Array) => Float32Array;
+  embedTextFromBytes?: (text: string, safetensors: Uint8Array, tokenizer: Uint8Array, config: Uint8Array) => Float32Array;
+  embedImageFromBytes?: (imageBytes: Uint8Array, modelOnnx: Uint8Array) => Float32Array;
+  // Embedding encoding functions (feature-gated in WASM)
   encodeElid?: (embedding: Float64Array, profile: ElidProfile) => string;
   encodeElidLossless?: (embedding: Float64Array) => string;
   encodeElidCompressed?: (embedding: Float64Array, retentionPct: number) => string;
@@ -438,6 +445,80 @@ export function mini128ToBands(
     return wasmModule.mini128ToBands(hash, numBands);
   } catch (e) {
     console.error("mini128ToBands error:", e);
+    return null;
+  }
+}
+
+// --- Model Embedding Functions ---
+
+/** Check if text model functions are available in the WASM build */
+export function hasTextModelSupport(): boolean {
+  return wasmModule?.initTextModel !== undefined;
+}
+
+/** Check if image model functions are available in the WASM build */
+export function hasImageModelSupport(): boolean {
+  return wasmModule?.initImageModel !== undefined;
+}
+
+/**
+ * Initialize the text embedding model by downloading from GitHub Releases.
+ * Call once before using embedText(). Idempotent.
+ */
+export async function initTextModel(): Promise<boolean> {
+  if (!wasmModule?.initTextModel) return false;
+  try {
+    await wasmModule.initTextModel();
+    return true;
+  } catch (e) {
+    console.error("initTextModel error:", e);
+    return false;
+  }
+}
+
+/**
+ * Initialize the image embedding model by downloading from GitHub Releases.
+ * Call once before using embedImage(). Idempotent.
+ */
+export async function initImageModel(): Promise<boolean> {
+  if (!wasmModule?.initImageModel) return false;
+  try {
+    await wasmModule.initImageModel();
+    return true;
+  } catch (e) {
+    console.error("initImageModel error:", e);
+    return false;
+  }
+}
+
+/**
+ * Embed text into a 256-dimensional vector using Model2Vec.
+ * Call initTextModel() first.
+ * @param text Input text to embed
+ * @returns Float32Array of 256 dimensions, or null if model not loaded
+ */
+export function embedText(text: string): Float32Array | null {
+  if (!wasmModule?.embedText) return null;
+  try {
+    return wasmModule.embedText(text);
+  } catch (e) {
+    console.error("embedText error:", e);
+    return null;
+  }
+}
+
+/**
+ * Embed an image into a 1000-dimensional vector using MobileNetV3-Small.
+ * Call initImageModel() first.
+ * @param imageBytes Raw JPEG/PNG bytes
+ * @returns Float32Array of 1000 dimensions, or null if model not loaded
+ */
+export function embedImage(imageBytes: Uint8Array): Float32Array | null {
+  if (!wasmModule?.embedImage) return null;
+  try {
+    return wasmModule.embedImage(imageBytes);
+  } catch (e) {
+    console.error("embedImage error:", e);
     return null;
   }
 }

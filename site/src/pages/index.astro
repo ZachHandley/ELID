@@ -6,6 +6,7 @@ import SimHashVisualizer from "../components/SimHashVisualizer.vue";
 import EmbeddingEncoder from "../components/EmbeddingEncoder.vue";
 import CrossDimensionalDemo from "../components/CrossDimensionalDemo.vue";
 import ImageSimilarityDemo from "../components/ImageSimilarityDemo.vue";
+import TextEmbeddingDemo from "../components/TextEmbeddingDemo.vue";
 ---
 
 <Layout title="ELID - Embedding Locality IDentifier">
@@ -214,6 +215,28 @@ import ImageSimilarityDemo from "../components/ImageSimilarityDemo.vue";
         class="bg-elid-surface border border-elid-border/50 rounded-xl p-5 sm:p-6"
       >
         <EmbeddingEncoder client:load />
+      </div>
+    </section>
+
+    <!-- Section: Text Embedding -->
+    <section id="text-embedding" class="mb-16">
+      <div class="flex items-center gap-3 mb-6">
+        <div
+          class="w-10 h-10 rounded-lg bg-elid-accent/10 flex items-center justify-center"
+        >
+          <span class="text-elid-accent text-xl">T</span>
+        </div>
+        <div>
+          <h2 class="text-2xl font-bold">Text Embedding</h2>
+          <p class="text-elid-text-muted text-sm">
+            Generate 256-dim embeddings using Model2Vec (potion-base-8M) — runs entirely in your browser via WASM + ONNX
+          </p>
+        </div>
+      </div>
+      <div
+        class="bg-elid-surface border border-elid-border/50 rounded-xl p-5 sm:p-6"
+      >
+        <TextEmbeddingDemo client:load />
       </div>
     </section>
 
