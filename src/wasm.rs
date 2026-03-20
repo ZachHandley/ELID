@@ -1061,6 +1061,117 @@ pub fn get_elid_metadata(elid_str: String) -> Result<JsValue, JsValue> {
     Ok(result.into())
 }
 
+// ===== Model Inference =====
+
+// --- Remote model initialization (fetches from GitHub Releases) ---
+
+/// Initialize the text embedding model by downloading from GitHub Releases.
+///
+/// Returns a Promise. Call this once before using `embedText()`.
+/// Subsequent calls return immediately (idempotent).
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// await initTextModel();
+/// const embedding = embedText("Hello, world!");
+/// console.log(embedding.length); // 256
+/// ```
+#[cfg(all(feature = "models-text", target_arch = "wasm32"))]
+#[wasm_bindgen(js_name = initTextModel)]
+pub async fn init_text_model() -> Result<(), JsError> {
+    crate::models::text::init_text_model()
+        .await
+        .map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Embed text into a 256-dimensional vector using Model2Vec.
+///
+/// Call `initTextModel()` first to download the model, or use
+/// `embedTextFromBytes()` to supply model data manually.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// await initTextModel();
+/// const embedding = embedText("Hello, world!");
+/// console.log(embedding.length); // 256
+/// ```
+#[cfg(feature = "models-text")]
+#[wasm_bindgen(js_name = embedText)]
+pub fn embed_text_simple(text: &str) -> Result<Vec<f32>, JsError> {
+    crate::models::text::embed_text_cached(text)
+        .map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Initialize the image embedding model by downloading from GitHub Releases.
+///
+/// Returns a Promise. Call this once before using `embedImage()`.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// await initImageModel();
+/// const embedding = embedImage(imageBytes);
+/// console.log(embedding.length); // 1000
+/// ```
+#[cfg(all(feature = "models-image", target_arch = "wasm32"))]
+#[wasm_bindgen(js_name = initImageModel)]
+pub async fn init_image_model() -> Result<(), JsError> {
+    crate::models::image::init_image_model()
+        .await
+        .map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Embed an image into a 1000-dimensional vector using MobileNetV3-Small.
+///
+/// Call `initImageModel()` first to download the model, or use
+/// `embedImageFromBytes()` to supply model data manually.
+///
+/// # JavaScript Example
+///
+/// ```javascript
+/// await initImageModel();
+/// const embedding = embedImage(imageBytes);
+/// console.log(embedding.length); // 1000
+/// ```
+#[cfg(feature = "models-image")]
+#[wasm_bindgen(js_name = embedImage)]
+pub fn embed_image_simple(image_bytes: &[u8]) -> Result<Vec<f32>, JsError> {
+    crate::models::image::embed_image_cached(image_bytes)
+        .map_err(|e| JsError::new(&e.to_string()))
+}
+
+// --- Bytes-based API (manual model loading) ---
+
+/// Embed text by passing model files as byte arrays.
+///
+/// Use this if you want to host models yourself instead of using `initTextModel()`.
+#[cfg(feature = "models-text")]
+#[wasm_bindgen(js_name = embedTextFromBytes)]
+pub fn embed_text_from_bytes(
+    text: &str,
+    safetensors_bytes: &[u8],
+    tokenizer_json: &[u8],
+    config_json: &[u8],
+) -> Result<Vec<f32>, JsError> {
+    crate::models::embed_text_from_bytes(text, safetensors_bytes, tokenizer_json, config_json)
+        .map_err(|e| JsError::new(&e.to_string()))
+}
+
+/// Embed an image by passing the ONNX model as a byte array.
+///
+/// Use this if you want to host models yourself instead of using `initImageModel()`.
+#[cfg(feature = "models-image")]
+#[wasm_bindgen(js_name = embedImageFromBytes)]
+pub fn embed_image_from_bytes(
+    image_bytes: &[u8],
+    model_onnx: &[u8],
+) -> Result<Vec<f32>, JsError> {
+    crate::models::embed_image_from_bytes(image_bytes, model_onnx)
+        .map_err(|e| JsError::new(&e.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -200,8 +200,9 @@ jobs:
       - name: Dispatch release workflow
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          echo "Dispatching release for version: ${VERSION}"
           curl -X POST \
             -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
             -H "Content-Type: application/json" \
             "${{ github.server_url }}/api/v1/repos/${{ github.repository }}/actions/workflows/release.yml/dispatches" \
-            -d "{\"ref\": \"main\", \"inputs\": {\"version\": \"${VERSION}\"}}"
+            -d "$(jq -n --arg version "$VERSION" '{ref: "main", inputs: {version: $version}}')"

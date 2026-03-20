@@ -959,7 +959,7 @@ fn embed_text(text: &str) -> PyResult<Vec<f32>> {
 
 /// Embed image using MobileNetV3-Small model
 ///
-/// Converts an image into a 1024-dimensional embedding vector using
+/// Converts an image into a 1000-dimensional embedding vector using
 /// the MobileNetV3-Small model. Supports JPEG and PNG formats.
 /// This is useful for image similarity, search, and clustering.
 ///
@@ -967,7 +967,7 @@ fn embed_text(text: &str) -> PyResult<Vec<f32>> {
 ///     image_bytes (bytes): Raw image bytes (JPEG or PNG)
 ///
 /// Returns:
-///     list[float]: 1024-dimensional embedding as list of floats
+///     list[float]: 1000-dimensional embedding as list of floats
 ///
 /// Raises:
 ///     ValueError: If model not available, image decode fails, or inference fails
@@ -978,13 +978,51 @@ fn embed_text(text: &str) -> PyResult<Vec<f32>> {
 ///     ...     image_bytes = f.read()
 ///     >>> embedding = elid.embed_image(image_bytes)
 ///     >>> len(embedding)
-///     1024
+///     1000
 ///     >>> type(embedding[0])
 ///     <class 'float'>
 #[cfg(feature = "models-image")]
 #[pyfunction]
 fn embed_image(image_bytes: &[u8]) -> PyResult<Vec<f32>> {
     crate::models::embed_image(image_bytes)
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+}
+
+/// Initialize text model by downloading from GitHub Releases
+///
+/// Downloads the Model2Vec model files (~30MB) and caches them.
+/// Call this once before using embed_text() if you don't have
+/// model files locally.
+///
+/// Requires the `models-fetch` feature.
+///
+/// Example:
+///     >>> import elid
+///     >>> elid.init_text_model()
+///     >>> embedding = elid.embed_text("Hello!")
+#[cfg(all(not(target_arch = "wasm32"), feature = "models-fetch", feature = "models-text"))]
+#[pyfunction]
+fn init_text_model() -> PyResult<()> {
+    crate::models::text::init_text_model_blocking()
+        .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
+}
+
+/// Initialize image model by downloading from GitHub Releases
+///
+/// Downloads the MobileNetV3-Small model (~10MB) and caches it.
+/// Call this once before using embed_image() if you don't have
+/// model files locally.
+///
+/// Requires the `models-fetch` feature.
+///
+/// Example:
+///     >>> import elid
+///     >>> elid.init_image_model()
+///     >>> embedding = elid.embed_image(image_bytes)
+#[cfg(all(not(target_arch = "wasm32"), feature = "models-fetch", feature = "models-image"))]
+#[pyfunction]
+fn init_image_model() -> PyResult<()> {
+    crate::models::image::init_image_model_blocking()
         .map_err(|e| pyo3::exceptions::PyValueError::new_err(e.to_string()))
 }
 
@@ -1097,6 +1135,12 @@ fn elid(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     #[cfg(feature = "models-image")]
     m.add_function(wrap_pyfunction!(embed_image, m)?)?;
+
+    #[cfg(all(not(target_arch = "wasm32"), feature = "models-fetch", feature = "models-text"))]
+    m.add_function(wrap_pyfunction!(init_text_model, m)?)?;
+
+    #[cfg(all(not(target_arch = "wasm32"), feature = "models-fetch", feature = "models-image"))]
+    m.add_function(wrap_pyfunction!(init_image_model, m)?)?;
 
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 

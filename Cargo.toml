@@ -22,10 +22,11 @@ embeddings = [                # Vector encoding (now included by default)
   "dep:blake3", "dep:data-encoding", "dep:once_cell",
   "dep:thiserror", "dep:serde", "dep:half"
 ]
-models = ["dep:tract-onnx"]   # Base ONNX model support
-models-text = ["models"]      # Text embedding models (Model2Vec)
-models-image = ["models", "dep:image"]  # Image embedding models (MobileNetV3)
-wasm = ["strings", "embeddings", "dep:wasm-bindgen", "dep:js-sys", "dep:serde", "dep:serde-wasm-bindgen", "dep:serde_json", "dep:getrandom"]
+models = []                   # Base model support (error types, path resolution)
+models-text = ["models", "dep:safetensors", "dep:tokenizers", "dep:serde_json"]  # Text embedding (Model2Vec via safetensors)
+models-image = ["models", "dep:tract-onnx", "dep:image"]  # Image embedding (MobileNetV3 via ONNX)
+models-fetch = ["models", "dep:ureq"]  # Native HTTP model fetching (Python/FFI)
+wasm = ["strings", "embeddings", "dep:wasm-bindgen", "dep:js-sys", "dep:serde", "dep:serde-wasm-bindgen", "dep:serde_json", "dep:getrandom", "dep:wasm-bindgen-futures", "dep:gloo-net"]
 python = ["strings", "embeddings", "dep:pyo3", "dep:numpy", "dep:rayon"]
 ffi = ["strings", "embeddings"]
 
@@ -49,11 +50,19 @@ getrandom = { version = "0.2", features = ["js"], optional = true }
 numpy = { version = "0.27", optional = true }
 tract-onnx = { version = "0.21", optional = true }
 image = { version = "0.25", optional = true, default-features = false, features = ["jpeg", "png"] }
+safetensors = { version = "0.7", optional = true, default-features = false, features = ["std"] }
+tokenizers = { version = "0.22", optional = true, default-features = false, features = ["fancy-regex"] }
+ureq = { version = "3", optional = true }
+gloo-net = { version = "0.6", optional = true, features = ["http"] }
+wasm-bindgen-futures = { version = "0.4", optional = true }
 
 [dependencies.pyo3]
 version = "0.27"
 features = ["extension-module"]
 optional = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
 
 [dev-dependencies]
 criterion = "0.5"

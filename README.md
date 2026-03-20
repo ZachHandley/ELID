@@ -194,9 +194,9 @@ let distance = levenshtein_with_opts("  HELLO  ", "hello", &opts); // 0
 |---------|-------------|--------------|
 | `strings` | String similarity algorithms (default) | None |
 | `embeddings` | Embedding encoding (default) | rand, blake3, etc. |
-| `models` | Base ONNX model support | tract-onnx |
+| `models` | Base model support (error types, path resolution) | None |
 | `models-text` | Text embedding (Model2Vec, 256-dim) | models |
-| `models-image` | Image embedding (MobileNetV3, 1024-dim) | models, image |
+| `models-image` | Image embedding (MobileNetV3-Small, 1000-dim) | models, image |
 | `wasm` | WebAssembly bindings (includes embeddings) | wasm-bindgen, js-sys, getrandom |
 | `python` | Python bindings via PyO3 (includes embeddings) | pyo3, numpy, rayon |
 | `ffi` | C FFI bindings | None (enables unsafe) |
@@ -216,7 +216,7 @@ ELID includes optional ONNX models for generating embeddings directly, without e
 | Package | Model | Dimensions | Size |
 |---------|-------|------------|------|
 | `elid-text` | Model2Vec potion-base-8M | 256 | ~8MB |
-| `elid-image` | MobileNetV3-Small | 1024 | ~5MB |
+| `elid-image` | MobileNetV3-Small | 1000 | ~10MB |
 
 **Text embeddings:**
 ```rust

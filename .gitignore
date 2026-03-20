@@ -58,8 +58,10 @@ pkg-both-web/
 
 # Downloaded ML models (use scripts/download_models.py)
 models/*.onnx
+models/*.data
 models/*.safetensors
 models/*.bin
+models/*.json
 
 # Node.js
 node_modules/

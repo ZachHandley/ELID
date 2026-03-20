@@ -23,18 +23,27 @@ jobs:
       version: ${{ steps.stamp.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Stamp version
         id: stamp
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            VERSION="${GITHUB_REF_NAME#v}"
-          elif [ -n "${{ inputs.version }}" ]; then
+          if [ -n "${{ inputs.version }}" ]; then
             VERSION="${{ inputs.version }}"
             VERSION="${VERSION#v}"
           else
-            echo "::error::No version. Push a v* tag or set the version input."
-            exit 1
+            # Auto-increment: find latest v* tag and bump patch
+            LATEST=$(git tag -l 'v*.*.*' | sed 's/^v//' | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
+            if [ -z "$LATEST" ]; then
+              VERSION="0.1.0"
+            else
+              MAJOR=$(echo "$LATEST" | cut -d. -f1)
+              MINOR=$(echo "$LATEST" | cut -d. -f2)
+              PATCH=$(echo "$LATEST" | cut -d. -f3)
+              VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+            fi
+            echo "Auto-incremented version: $VERSION"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Stamping version: $VERSION"
