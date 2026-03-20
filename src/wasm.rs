@@ -1100,8 +1100,7 @@ pub async fn init_text_model() -> Result<(), JsError> {
 #[cfg(feature = "models-text")]
 #[wasm_bindgen(js_name = embedText)]
 pub fn embed_text_simple(text: &str) -> Result<Vec<f32>, JsError> {
-    crate::models::text::embed_text_cached(text)
-        .map_err(|e| JsError::new(&e.to_string()))
+    crate::models::text::embed_text_cached(text).map_err(|e| JsError::new(&e.to_string()))
 }
 
 /// Initialize the image embedding model by downloading from GitHub Releases.
@@ -1138,8 +1137,7 @@ pub async fn init_image_model() -> Result<(), JsError> {
 #[cfg(feature = "models-image")]
 #[wasm_bindgen(js_name = embedImage)]
 pub fn embed_image_simple(image_bytes: &[u8]) -> Result<Vec<f32>, JsError> {
-    crate::models::image::embed_image_cached(image_bytes)
-        .map_err(|e| JsError::new(&e.to_string()))
+    crate::models::image::embed_image_cached(image_bytes).map_err(|e| JsError::new(&e.to_string()))
 }
 
 // --- Bytes-based API (manual model loading) ---
@@ -1164,10 +1162,7 @@ pub fn embed_text_from_bytes(
 /// Use this if you want to host models yourself instead of using `initImageModel()`.
 #[cfg(feature = "models-image")]
 #[wasm_bindgen(js_name = embedImageFromBytes)]
-pub fn embed_image_from_bytes(
-    image_bytes: &[u8],
-    model_onnx: &[u8],
-) -> Result<Vec<f32>, JsError> {
+pub fn embed_image_from_bytes(image_bytes: &[u8], model_onnx: &[u8]) -> Result<Vec<f32>, JsError> {
     crate::models::embed_image_from_bytes(image_bytes, model_onnx)
         .map_err(|e| JsError::new(&e.to_string()))
 }

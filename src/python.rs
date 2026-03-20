@@ -1000,7 +1000,11 @@ fn embed_image(image_bytes: &[u8]) -> PyResult<Vec<f32>> {
 ///     >>> import elid
 ///     >>> elid.init_text_model()
 ///     >>> embedding = elid.embed_text("Hello!")
-#[cfg(all(not(target_arch = "wasm32"), feature = "models-fetch", feature = "models-text"))]
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    feature = "models-fetch",
+    feature = "models-text"
+))]
 #[pyfunction]
 fn init_text_model() -> PyResult<()> {
     crate::models::text::init_text_model_blocking()
@@ -1019,7 +1023,11 @@ fn init_text_model() -> PyResult<()> {
 ///     >>> import elid
 ///     >>> elid.init_image_model()
 ///     >>> embedding = elid.embed_image(image_bytes)
-#[cfg(all(not(target_arch = "wasm32"), feature = "models-fetch", feature = "models-image"))]
+#[cfg(all(
+    not(target_arch = "wasm32"),
+    feature = "models-fetch",
+    feature = "models-image"
+))]
 #[pyfunction]
 fn init_image_model() -> PyResult<()> {
     crate::models::image::init_image_model_blocking()
@@ -1136,10 +1144,18 @@ fn elid(m: &Bound<'_, PyModule>) -> PyResult<()> {
     #[cfg(feature = "models-image")]
     m.add_function(wrap_pyfunction!(embed_image, m)?)?;
 
-    #[cfg(all(not(target_arch = "wasm32"), feature = "models-fetch", feature = "models-text"))]
+    #[cfg(all(
+        not(target_arch = "wasm32"),
+        feature = "models-fetch",
+        feature = "models-text"
+    ))]
     m.add_function(wrap_pyfunction!(init_text_model, m)?)?;
 
-    #[cfg(all(not(target_arch = "wasm32"), feature = "models-fetch", feature = "models-image"))]
+    #[cfg(all(
+        not(target_arch = "wasm32"),
+        feature = "models-fetch",
+        feature = "models-image"
+    ))]
     m.add_function(wrap_pyfunction!(init_image_model, m)?)?;
 
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

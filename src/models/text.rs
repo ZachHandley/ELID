@@ -90,7 +90,8 @@ impl TextModel {
 
         // Load safetensors embedding matrix
         let safetensors_bytes = std::fs::read(safetensors_path)?;
-        let (embeddings, vocab_size) = Self::parse_embeddings(&safetensors_bytes, config.hidden_dim)?;
+        let (embeddings, vocab_size) =
+            Self::parse_embeddings(&safetensors_bytes, config.hidden_dim)?;
 
         Ok(Self {
             embeddings,
@@ -112,7 +113,8 @@ impl TextModel {
         let tokenizer = Tokenizer::from_bytes(tokenizer_json)
             .map_err(|e| ModelError::ModelLoad(format!("Tokenizer load failed: {e}")))?;
 
-        let (embeddings, vocab_size) = Self::parse_embeddings(safetensors_bytes, config.hidden_dim)?;
+        let (embeddings, vocab_size) =
+            Self::parse_embeddings(safetensors_bytes, config.hidden_dim)?;
 
         Ok(Self {
             embeddings,
@@ -246,9 +248,8 @@ impl TextModel {
 /// assert_eq!(embedding.len(), 256);
 /// ```
 pub fn embed_text(text: &str) -> Result<Vec<f32>, ModelError> {
-    let model = TEXT_MODEL.get_or_init(|| {
-        TextModel::load_from_dir(&models_dir()).map_err(|e| e.to_string())
-    });
+    let model = TEXT_MODEL
+        .get_or_init(|| TextModel::load_from_dir(&models_dir()).map_err(|e| e.to_string()));
 
     match model {
         Ok(m) => m.embed(text),

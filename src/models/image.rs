@@ -63,9 +63,7 @@ impl ImageModel {
             )));
         }
 
-        let model = Self::build_model(
-            tract_onnx::onnx().model_for_path(path)?
-        )?;
+        let model = Self::build_model(tract_onnx::onnx().model_for_path(path)?)?;
 
         Ok(Self { model })
     }
@@ -73,9 +71,7 @@ impl ImageModel {
     /// Load from raw ONNX bytes (for WASM)
     pub(crate) fn load_from_bytes(onnx_bytes: &[u8]) -> Result<Self, ModelError> {
         let mut cursor = std::io::Cursor::new(onnx_bytes);
-        let model = Self::build_model(
-            tract_onnx::onnx().model_for_read(&mut cursor)?
-        )?;
+        let model = Self::build_model(tract_onnx::onnx().model_for_read(&mut cursor)?)?;
 
         Ok(Self { model })
     }
@@ -103,9 +99,15 @@ impl ImageModel {
         // Resize: shortest edge to RESIZE_SIZE, maintain aspect ratio
         let (w, h) = (rgb.width(), rgb.height());
         let (new_w, new_h) = if w < h {
-            (RESIZE_SIZE, (RESIZE_SIZE as f64 * h as f64 / w as f64) as u32)
+            (
+                RESIZE_SIZE,
+                (RESIZE_SIZE as f64 * h as f64 / w as f64) as u32,
+            )
         } else {
-            ((RESIZE_SIZE as f64 * w as f64 / h as f64) as u32, RESIZE_SIZE)
+            (
+                (RESIZE_SIZE as f64 * w as f64 / h as f64) as u32,
+                RESIZE_SIZE,
+            )
         };
 
         let resized = image::imageops::resize(
@@ -239,7 +241,10 @@ pub fn embed_image(image_bytes: &[u8]) -> Result<Vec<f32>, ModelError> {
 /// let embedding = embed_image_from_bytes(image, model)?;
 /// assert_eq!(embedding.len(), 1000);
 /// ```
-pub fn embed_image_from_bytes(image_bytes: &[u8], model_onnx: &[u8]) -> Result<Vec<f32>, ModelError> {
+pub fn embed_image_from_bytes(
+    image_bytes: &[u8],
+    model_onnx: &[u8],
+) -> Result<Vec<f32>, ModelError> {
     let model = ImageModel::load_from_bytes(model_onnx)?;
     model.embed(image_bytes)
 }
