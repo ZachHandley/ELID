@@ -23,7 +23,9 @@ jobs:
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
 
       - name: Cargo Audit
-        uses: https://forge.blackleafdigital.com/Public/actions/cargo-audit@main
+        run: |
+          cargo install cargo-audit --locked
+          cargo audit
 
   clippy:
     name: Clippy (deny warnings)
