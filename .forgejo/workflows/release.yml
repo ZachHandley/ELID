@@ -272,15 +272,11 @@ jobs:
           sed -i "s/0\.0\.0-dev/${VERSION}/g" src/ffi.rs
 
       - name: Prepare GitHub Actions workflows
-        run: |
-          mkdir -p .github/workflows
-          cp .forgejo/workflows/*.yml .github/workflows/
-          cd .github/workflows
-          sed -i 's|https://forge.blackleafdigital.com/Public/actions/setup-rust@main|dtolnay/rust-toolchain@stable|g' *.yml
-          sed -i 's|https://forge.blackleafdigital.com/Public/actions/setup-node@main|actions/setup-node@v4|g' *.yml
-          sed -i 's|https://forge.blackleafdigital.com/Public/actions/setup-python@main|actions/setup-python@v5|g' *.yml
-          sed -i 's|https://github.com/christopherhx/gitea-upload-artifact@v4|actions/upload-artifact@v4|g' *.yml
-          sed -i 's|https://github.com/christopherhx/gitea-download-artifact@v4|actions/download-artifact@v4|g' *.yml
+        # Generates .github/workflows/ from the .forgejo sources: swaps the
+        # org composite actions for upstream ones, injects pnpm/uv setup,
+        # strips sccache inputs, and drops the Forgejo-only dispatch jobs.
+        # A plain sed pass can't inject the extra setup steps GitHub needs.
+        run: python3 ci/sync-github-workflows.py
 
       - name: Update README for GitHub
         run: |
