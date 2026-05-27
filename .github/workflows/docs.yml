@@ -1,0 +1,167 @@
+name: Documentation
+
+on:
+  push:
+    tags:
+      - 'docs-v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Docs version (e.g., 0.1.0). Auto-increments if empty.'
+        required: false
+        type: string
+
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rustdoc:
+    name: Build Rust Documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          sccache: true
+          sccache-s3-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-s3-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-s3-region: ${{ secrets.S3_REGION }}
+          sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/elid
+
+      - name: Build docs
+        run: cargo doc --features ffi,wasm --no-deps
+
+      - name: Create redirect index
+        run: |
+          DOC_DIR="${CARGO_TARGET_DIR:-./target}/doc"
+          echo '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0; url=elid/index.html"></head></html>' > "$DOC_DIR/index.html"
+
+      - name: Upload documentation
+        run: |
+          DOC_DIR="${CARGO_TARGET_DIR:-./target}/doc"
+          echo "DOC_DIR=$DOC_DIR" >> $GITHUB_ENV
+        # Can't use env vars in 'with', so copy to a known location
+      - name: Stage docs for upload
+        run: cp -r "${CARGO_TARGET_DIR:-./target}/doc" ./docs-output
+
+      - name: Upload documentation artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-docs
+          path: docs-output/
+          retention-days: 30
+
+  c-header:
+    name: Verify C Header Generation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          sccache: true
+          sccache-s3-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-s3-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-s3-region: ${{ secrets.S3_REGION }}
+          sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/elid
+
+      - name: Build with FFI
+        run: cargo build --release --features ffi
+
+      - name: Verify header
+        run: |
+          [ -f elid.h ] || { echo "elid.h not generated"; exit 1; }
+          echo "elid.h generated: $(stat -c%s elid.h) bytes"
+
+  demo-site:
+    name: Build & Deploy Demo Site
+    runs-on: ubuntu-latest
+    needs: [rustdoc]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          sccache: true
+          sccache-s3-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-s3-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-s3-region: ${{ secrets.S3_REGION }}
+          sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/elid
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build WASM for demo site
+        run: |
+          pnpm exec wasm-pack build --target web --out-dir site/public/wasm -- --features wasm
+          rm -f site/public/wasm/.gitignore
+
+      - name: Determine version
+        id: version
+        run: |
+          INPUT_VERSION="${{ inputs.version }}"
+          if [ -n "$INPUT_VERSION" ]; then
+            VERSION="${INPUT_VERSION#v}"
+          elif [[ "$GITHUB_REF_NAME" == docs-v* ]]; then
+            VERSION="${GITHUB_REF_NAME#docs-v}"
+          else
+            # Fetch tags from GitHub to find latest
+            LATEST=$(git ls-remote --tags https://x-access-token:${{ secrets.GH_ACCESS_TOKEN }}@github.com/zachhandley/elid.git 'refs/tags/docs-v*' | \
+              sed 's/.*refs\/tags\/docs-v//' | \
+              sort -t. -k1,1n -k2,2n -k3,3n | \
+              tail -1)
+            if [ -z "$LATEST" ]; then
+              VERSION="0.0.1"
+            else
+              MAJOR=$(echo "$LATEST" | cut -d. -f1)
+              MINOR=$(echo "$LATEST" | cut -d. -f2)
+              PATCH=$(echo "$LATEST" | cut -d. -f3)
+              VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+            fi
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Docs version: $VERSION"
+
+      - name: Build demo site
+        run: |
+          cd site
+          pnpm install
+          ASTRO_SITE=https://zachhandley.github.io ASTRO_BASE=/ELID pnpm run build
+          touch dist/.nojekyll
+          cp dist/index.html dist/404.html
+
+      - name: Push to GitHub docs branch with tag
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          cd site/dist
+          git init
+          git checkout --orphan docs
+          git add -A
+          git -c user.name="Zach Handley" -c user.email="zachhandley@gmail.com" \
+            commit -m "Docs site v${VERSION}"
+          git tag "docs-v${VERSION}"
+          git remote add github https://x-access-token:${{ secrets.GH_ACCESS_TOKEN }}@github.com/zachhandley/elid.git
+          git push github docs --force
+          git push github "docs-v${VERSION}"

@@ -1,6 +1,6 @@
 {
   "name": "@elid/core",
-  "version": "0.0.0-dev",
+  "version": "0.4.51",
   "description": "Embedding Locality IDentifier - encode embeddings into sortable string IDs for vector search, plus fast string similarity algorithms (WASM)",
   "main": "pkg/elid.js",
   "types": "pkg/elid.d.ts",
