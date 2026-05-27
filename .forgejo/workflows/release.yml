@@ -299,6 +299,11 @@ jobs:
           git config user.email "zachhandley@gmail.com"
           git add -A
           git commit -m "Release ${TAG} with GitHub Actions workflows"
+          # The tag is created in the separate create-release job on another
+          # runner, so it does not exist in this checkout. Create it here on the
+          # mirror commit (which carries the generated .github/workflows) so the
+          # push has a ref to send. -f covers the tag-triggered case too.
+          git tag -f "${TAG}"
           git remote add github https://x-access-token:${{ secrets.GH_ACCESS_TOKEN }}@github.com/zachhandley/elid.git
           git push github "refs/tags/${TAG}" --force
           git push github "HEAD:refs/heads/releases" --force
