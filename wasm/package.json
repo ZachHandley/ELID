@@ -1,0 +1,31 @@
+{
+  "name": "elid",
+  "type": "module",
+  "collaborators": [
+    "Zach Handley <zachhandley@gmail.com>"
+  ],
+  "description": "Embedding Locality IDentifier - encode embeddings into sortable string IDs for vector search without vector stores, plus fast string similarity algorithms",
+  "version": "0.0.0-dev",
+  "license": "MIT OR Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ZachHandley/ELID"
+  },
+  "files": [
+    "elid_bg.wasm",
+    "elid.js",
+    "elid.d.ts"
+  ],
+  "main": "elid.js",
+  "types": "elid.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ],
+  "keywords": [
+    "embeddings",
+    "vector-search",
+    "similarity",
+    "levenshtein",
+    "fuzzy-search"
+  ]
+}
