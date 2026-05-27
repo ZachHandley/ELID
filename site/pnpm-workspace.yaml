@@ -1,0 +1,9 @@
+# pnpm 10 reads build-script approvals from here (this is where
+# `pnpm approve-builds` writes them). esbuild and sharp ship their real
+# binaries via optional deps, but their install scripts must be allowed or
+# pnpm 10 aborts with ERR_PNPM_IGNORED_BUILDS. Project package.json
+# `onlyBuiltDependencies` is ignored under the CI runner's global pnpm config,
+# so it must live in the workspace file.
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
