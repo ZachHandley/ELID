@@ -63,6 +63,15 @@ optional = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom03 = { package = "getrandom", version = "0.3", features = ["wasm_js"] }
+# The optional `rand 0.8` chain (enabled by the `embeddings` feature, which is
+# in the default set) pulls `rand_core 0.6` → `getrandom 0.2`, whose wasm32
+# build errors unless its `js` feature is activated. Declaring it here under
+# the wasm32 target — unconditionally, not gated on the `wasm` feature —
+# means any downstream consumer (Blazen, ai_brain, ztrader, ...) that builds
+# ELID for wasm32 gets the `js` flag flipped via Cargo's additive feature
+# unification, without needing to manually re-pin getrandom 0.2 in their own
+# Cargo.toml. Mirrors the existing `getrandom03` line above.
+getrandom02 = { package = "getrandom", version = "0.2", default-features = false, features = ["js"] }
 
 [dev-dependencies]
 criterion = "0.5"
