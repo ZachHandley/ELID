@@ -165,15 +165,10 @@ jobs:
           echo "Docs version: $VERSION"
 
       - name: Build demo site
-        env:
-          # Astro's prebuild deps-status check internally spawns the runner's
-          # globally installed pnpm v11 (NOT the project's pinned pnpm 10),
-          # which re-fails on ERR_PNPM_IGNORED_BUILDS even after our outer
-          # install passes. NPM_CONFIG_* propagates to every spawned pnpm,
-          # so this disarms the strict mode globally for the step.
-          NPM_CONFIG_STRICT_DEP_BUILDS: "false"
         run: |
           cd site
+          # site/.npmrc holds the only-built-dependencies allowlist + the
+          # strict-dep-builds=false escape; pnpm reads it unconditionally.
           pnpm install
           ASTRO_SITE=https://zachhandley.github.io ASTRO_BASE=/ELID pnpm run build
           touch dist/.nojekyll
