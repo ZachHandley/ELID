@@ -1089,14 +1089,26 @@ mod models_text_tests {
     }
 
     #[test]
-    fn test_ffi_embed_text_not_implemented() {
-        // Currently the model returns an error since it's not implemented yet
+    fn test_ffi_embed_text_roundtrip() {
+        // With the model files present under $ELID_MODELS_DIR (or ./models),
+        // elid_embed_text should return a non-null pointer to a 256-f32 vector
+        // and write the length. Without the files it returns NULL — both paths
+        // are valid for this smoke test; we just want no panic and a consistent
+        // (ptr, len) relationship.
         let text = CString::new("Hello, world!").unwrap();
         unsafe {
             let mut out_len: usize = 0;
             let result = elid_embed_text(text.as_ptr(), &mut out_len);
-            // Model is not implemented yet, should return NULL
-            assert!(result.is_null(), "Should return NULL when model not loaded");
+            if result.is_null() {
+                assert_eq!(out_len, 0, "NULL result must report zero length");
+            } else {
+                assert_eq!(
+                    out_len,
+                    crate::models::TEXT_EMBEDDING_DIM,
+                    "Text embedding length must match TEXT_EMBEDDING_DIM"
+                );
+                elid_free_embedding(result, out_len);
+            }
         }
     }
 }
@@ -1116,7 +1128,7 @@ mod models_image_tests {
             assert!(result.is_null(), "Should return NULL for null image_bytes");
 
             // Zero length
-            let bytes = vec![0u8; 100];
+            let bytes = [0u8; 100];
             let result = elid_embed_image(bytes.as_ptr(), 0, &mut out_len);
             assert!(result.is_null(), "Should return NULL for zero length");
 
@@ -1129,7 +1141,7 @@ mod models_image_tests {
     #[test]
     fn test_ffi_embed_image_not_implemented() {
         // Currently the model returns an error since it's not implemented yet
-        let dummy_bytes = vec![0u8; 100];
+        let dummy_bytes = [0u8; 100];
         unsafe {
             let mut out_len: usize = 0;
             let result = elid_embed_image(dummy_bytes.as_ptr(), dummy_bytes.len(), &mut out_len);

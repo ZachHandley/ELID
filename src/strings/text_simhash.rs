@@ -247,7 +247,7 @@ mod tests {
 
     #[test]
     fn test_find_similar_hashes() {
-        let candidates = vec!["iPhone 14 Pro", "iPhone 13", "Galaxy S23", "iPhone 14"];
+        let candidates = ["iPhone 14 Pro", "iPhone 13", "Galaxy S23", "iPhone 14"];
         let hashes: Vec<u64> = candidates.iter().map(|s| simhash(s)).collect();
 
         let query_hash = simhash("iPhone 14");
@@ -274,9 +274,9 @@ mod tests {
     #[test]
     fn test_feature_extraction() {
         let features = extract_features("abc");
-        assert!(features.len() > 0);
+        assert!(!features.is_empty());
 
         let features = extract_features("hello world");
-        assert!(features.len() > 0);
+        assert!(!features.is_empty());
     }
 }

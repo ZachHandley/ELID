@@ -65,9 +65,17 @@ pub const MODEL_BASE_URL: &str = "https://github.com/ZachHandley/ELID/releases/d
 /// Current version used for model download URLs
 pub const MODEL_VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Get the download URL for a model file at the current version
+/// Get the download URL for a model file at the current version.
+///
+/// At build time, setting `ELID_MODEL_BASE_URL` redirects fetches to that prefix
+/// (filename is appended as-is, no version path inserted). This lets the demo
+/// site self-host the model files instead of relying on a GitHub release —
+/// useful when no published release matches `CARGO_PKG_VERSION` yet.
 pub fn model_url(filename: &str) -> String {
-    format!("{MODEL_BASE_URL}/v{MODEL_VERSION}/{filename}")
+    match option_env!("ELID_MODEL_BASE_URL") {
+        Some(base) => format!("{base}/{filename}"),
+        None => format!("{MODEL_BASE_URL}/v{MODEL_VERSION}/{filename}"),
+    }
 }
 
 /// Resolve the models directory path.

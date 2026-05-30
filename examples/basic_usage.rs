@@ -111,7 +111,7 @@ fn main() {
 
     // Example 9: Real-world scenario - Product search
     println!("9. Real-world Example - Product Search:");
-    let products = vec![
+    let products = [
         "iPhone 14 Pro Max",
         "iPhone 14 Pro",
         "iPhone 14",
@@ -120,7 +120,7 @@ fn main() {
         "Google Pixel 7",
     ];
 
-    let searches = vec!["iphone 14 pro", "galaxy", "pixel"];
+    let searches = ["iphone 14 pro", "galaxy", "pixel"];
 
     for search in searches {
         // Find matches with normalized comparison (case-insensitive)

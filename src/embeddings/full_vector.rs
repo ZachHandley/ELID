@@ -670,7 +670,7 @@ mod tests {
 
     #[test]
     fn test_half16_roundtrip() {
-        let values = vec![0.123, -0.987, 3.14, 0.0];
+        let values = [0.123_f32, -0.987, std::f32::consts::PI, 0.0];
         let encoded = encode_half16(&values);
         let decoded = decode_half16(&encoded).unwrap();
 

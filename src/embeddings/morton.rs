@@ -256,8 +256,11 @@ mod tests {
         let code = morton_encode(&coords, 10);
         assert!(code > 0, "Code should be non-zero");
 
-        // Verify dimensions fit (const assertion already checked at compile time)
-        const _: () = assert!(10 * 10 <= 128, "Should fit in u128");
+        // Verify dimensions fit (const assertion checked at compile time).
+        // 10 dims * 10 bits each = 100 bits, well within u128's 128-bit capacity.
+        const DIMS: usize = 10;
+        const BITS: usize = 10;
+        const _: () = assert!(DIMS * BITS <= 128, "Should fit in u128");
     }
 
     // ========================================================================

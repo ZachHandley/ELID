@@ -110,12 +110,32 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Setup Python
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
+        with:
+          python-version: '3.12'
+
       - name: Install dependencies
         run: pnpm install
 
-      - name: Build WASM for demo site
+      - name: Download text embedding model
+        # initTextModel() in the WASM build fetches three files from
+        # ${ELID_MODEL_BASE_URL}/. We self-host them under the demo site
+        # because no GitHub release matches CARGO_PKG_VERSION=0.0.0-dev.
         run: |
-          pnpm exec wasm-pack build --target web --out-dir site/public/wasm -- --features wasm
+          uv run --script scripts/download_models.py --text-only
+          mkdir -p site/public/models
+          cp models/potion-base-8m.safetensors site/public/models/
+          cp models/potion-base-8m-tokenizer.json site/public/models/
+          cp models/potion-base-8m-config.json site/public/models/
+
+      - name: Build WASM for demo site
+        env:
+          # Redirect init_text_model fetches to the deployed site, which serves
+          # the three files we just copied into site/public/models/.
+          ELID_MODEL_BASE_URL: https://zachhandley.github.io/ELID/models
+        run: |
+          pnpm exec wasm-pack build --target web --out-dir site/public/wasm -- --features "wasm,models-text"
           rm -f site/public/wasm/.gitignore
 
       - name: Determine version
