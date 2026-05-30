@@ -167,7 +167,12 @@ jobs:
       - name: Build demo site
         run: |
           cd site
-          pnpm install
+          # pnpm 10 errors on unapproved transitive build scripts (a new
+          # esbuild@0.27.7 appeared even though site/pnpm-workspace.yaml's
+          # `onlyBuiltDependencies` allowlist already covers esbuild + sharp).
+          # strict-dep-builds=false downgrades that to a warning; the allowlist
+          # still gates which scripts actually run.
+          pnpm install --config.strict-dep-builds=false
           ASTRO_SITE=https://zachhandley.github.io ASTRO_BASE=/ELID pnpm run build
           touch dist/.nojekyll
           cp dist/index.html dist/404.html
