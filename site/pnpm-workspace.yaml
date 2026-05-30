@@ -1,9 +1,15 @@
-# pnpm 10 reads build-script approvals from here (this is where
-# `pnpm approve-builds` writes them). esbuild and sharp ship their real
-# binaries via optional deps, but their install scripts must be allowed or
-# pnpm 10 aborts with ERR_PNPM_IGNORED_BUILDS. Project package.json
-# `onlyBuiltDependencies` is ignored under the CI runner's global pnpm config,
-# so it must live in the workspace file.
+# pnpm 10/11 only treats a directory as a "workspace root" (and therefore
+# reads onlyBuiltDependencies from here) when this file declares `packages`.
+# Without it the allowlist below was silently dropped and the build still
+# failed with ERR_PNPM_IGNORED_BUILDS for esbuild + sharp — exactly the
+# packages we tried to allow. `packages: ['.']` marks site/ itself as the
+# only workspace member so site/ becomes the workspace root.
+packages:
+  - '.'
+
+# esbuild and sharp ship native binaries via install scripts that must be
+# approved or pnpm aborts. esbuild appears in two versions (0.25.x and 0.27.x)
+# because Astro and @astrojs/vue pin different majors transitively.
 onlyBuiltDependencies:
   - esbuild
   - sharp
