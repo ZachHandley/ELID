@@ -10,6 +10,11 @@ packages:
 # esbuild and sharp ship native binaries via install scripts that must be
 # approved or pnpm aborts. esbuild appears in two versions (0.25.x and 0.27.x)
 # because Astro and @astrojs/vue pin different majors transitively.
+
+allowBuilds:
+  esbuild: true
+  sharp: true
+
 onlyBuiltDependencies:
   - esbuild
   - sharp
