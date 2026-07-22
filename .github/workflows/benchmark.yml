@@ -1,0 +1,75 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  benchmark:
+    name: Criterion Benchmarks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run benchmarks
+        run: cargo bench --bench similarity_bench
+
+  wasm-size:
+    name: WASM Size Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build WASM
+        run: pnpm run build:node
+
+      - name: Check WASM size
+        run: |
+          size=$(stat -c%s pkg-node/elid_bg.wasm)
+          size_kb=$((size / 1024))
+          echo "WASM size: ${size_kb} KB"
+
+          max_size_kb=300
+          if [ $size_kb -gt $max_size_kb ]; then
+            echo "FAILED: WASM is ${size_kb}KB > ${max_size_kb}KB"
+            exit 1
+          fi
+          echo "PASSED: WASM is ${size_kb}KB <= ${max_size_kb}KB"
+
+      - name: Build native library
+        run: cargo build --release
+
+      - name: Report native size
+        run: |
+          size=$(stat -c%s ${CARGO_TARGET_DIR:-./target}/release/libelid.so)
+          size_kb=$((size / 1024))
+          echo "Native library size: ${size_kb} KB"

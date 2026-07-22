@@ -1,0 +1,143 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*.*.*'
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  check:
+    name: Check & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt,clippy
+
+      - name: Check formatting
+        run: cargo fmt -- --check
+
+      - name: Clippy
+        run: cargo clippy --features ffi,wasm -- -D warnings
+
+  test:
+    name: Rust Tests
+    runs-on: ubuntu-latest
+    needs: [check]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run core tests
+        run: cargo test --lib
+
+      - name: Run integration tests
+        run: cargo test --test integration_tests
+
+      - name: Run FFI tests
+        run: cargo test --features ffi,embeddings
+
+      - name: Run doc tests
+        run: cargo test --doc
+
+  test-ffi:
+    name: C FFI Tests
+    runs-on: ubuntu-latest
+    needs: [check]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build C library
+        run: cargo build --release --features ffi,embeddings
+
+      - name: Run FFI unit tests
+        run: "cargo test --features ffi,embeddings ffi::"
+
+      - name: Compile C test
+        run: gcc tests/ffi/test-c-ffi.c -I. -L${CARGO_TARGET_DIR:-./target}/release -lelid -o test-c-ffi-bin
+
+      - name: Run C test
+        run: LD_LIBRARY_PATH=${CARGO_TARGET_DIR:-./target}/release ./test-c-ffi-bin
+
+  test-wasm:
+    name: WASM Tests
+    runs-on: ubuntu-latest
+    needs: [check]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build all WASM targets
+        run: pnpm run build:all
+
+      - name: Run WASM tests
+        run: pnpm run test:all
+
+      - name: Verify WASM file sizes
+        run: |
+          for target in pkg-node pkg pkg-web; do
+            size=$(stat -c%s ${target}/elid_bg.wasm)
+            echo "${target}/elid_bg.wasm: ${size} bytes"
+            [ ${size} -gt 90000 ] || { echo "WASM too small: ${target}"; exit 1; }
+          done
+
+  test-python:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    needs: [check]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install uv
+        uses: astral-sh/setup-uv@v8
+
+      - name: Build Python wheel
+        run: uv run maturin build --release --features python --out dist
+
+      - name: Install wheel
+        run: uv pip install dist/elid-*.whl
+
+      - name: Run Python tests
+        run: uv run python tests/python/test_bindings.py

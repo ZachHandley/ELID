@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "elid"
-version = "0.0.0-dev"
+version = ""
 description = "Embedding Locality IDentifier - encode embeddings into sortable string IDs for vector search, plus fast string similarity algorithms"
 authors = [{name = "Zach Handley", email = "zachhandley@gmail.com"}]
 readme = "README.md"

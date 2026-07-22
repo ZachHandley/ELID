@@ -1,0 +1,77 @@
+#!/bin/sh
+set -eu
+self="$0"
+real_brew=""
+for c in /opt/homebrew/bin/brew /usr/local/bin/brew /home/linuxbrew/.linuxbrew/bin/brew; do
+  if [ -x "$c" ] && [ "$c" != "$self" ]; then real_brew="$c"; break; fi
+done
+# Map a brew formula to the primary binary it provides (best-effort; default
+# strips any @version suffix and uses the formula name).
+brew_bin() {
+  case "$1" in
+    protobuf|protobuf@*) echo protoc ;;
+    pkg-config|pkgconf) echo pkg-config ;;
+    openssl|openssl@*) echo openssl ;;
+    llvm) echo clang ;;
+    *) echo "${1%@*}" ;;
+  esac
+}
+# Only intercept the install subcommand; everything else is a real brew passthrough.
+if [ "${1:-}" != "install" ]; then
+  if [ -n "$real_brew" ]; then exec "$real_brew" "$@"; fi
+  echo "brew-shim: real brew not found for: $*" >&2
+  exit 127
+fi
+shift
+formulae=""
+for a in "$@"; do
+  case "$a" in
+    -*) : ;;
+    *) formulae="$formulae $a" ;;
+  esac
+done
+unresolved=""
+for f in $formulae; do
+  bin=$(brew_bin "$f")
+  # 1) Already resolvable on PATH (ZLayer toolchain / Xcode CLT already provides it).
+  if command -v "$bin" >/dev/null 2>&1; then
+    echo "brew-shim: '$f' already provided ($(command -v "$bin")); skipping brew"
+    continue
+  fi
+  # 2) macOS host: provision on demand via the ZLayer toolchain resolver.
+  if command -v zlayer >/dev/null 2>&1; then
+    if out=$(zlayer toolchains ensure "$f" 2>/dev/null); then
+      dir=$(printf '%s\n' "$out" | awk '/^ready/{print $NF}' | tail -n1)
+      # Only accept the toolchain if it actually provides the expected binary —
+      # an incomplete recipe (e.g. an unsupported install_symlink) can produce a
+      # bin dir missing the aliased name, which must NOT be counted as resolved.
+      if [ -n "${dir:-}" ] && [ -x "$dir/bin/$bin" ]; then
+        [ -n "${GITHUB_PATH:-}" ] && echo "$dir/bin" >> "$GITHUB_PATH"
+        echo "brew-shim: '$f' provisioned via ZLayer toolchain: $dir/bin"
+        continue
+      fi
+    fi
+  fi
+  # 3) Container: resolve from the mounted ZLayer toolchain cache.
+  cache="${RUNNER_TOOL_CACHE:-/opt/zlayer/toolchains}"
+  if [ -d "$cache" ]; then
+    hit=$(find "$cache" -maxdepth 4 -type f -name "$bin" 2>/dev/null | head -n1 || true)
+    if [ -n "$hit" ]; then
+      dir=$(dirname "$hit")
+      [ -n "${GITHUB_PATH:-}" ] && echo "$dir" >> "$GITHUB_PATH"
+      echo "brew-shim: '$f' found in ZLayer toolchain cache: $dir"
+      continue
+    fi
+  fi
+  unresolved="$unresolved $f"
+done
+# 4) Loud fallback to real Homebrew for whatever the toolchain could not provide.
+if [ -n "$unresolved" ]; then
+  if [ -n "$real_brew" ]; then
+    echo "brew-shim: falling back to real brew for:$unresolved" >&2
+    exec "$real_brew" install $unresolved
+  fi
+  echo "brew-shim: ZLayer toolchain could not provide:$unresolved (no real brew present)" >&2
+  exit 1
+fi
+exit 0

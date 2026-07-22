@@ -1,6 +1,6 @@
 [package]
 name = "elid"
-version = "0.0.0-dev"
+version = ""
 edition = "2021"
 authors = ["Zach Handley <zachhandley@gmail.com>"]
 description = "Embedding Locality IDentifier - encode embeddings into sortable string IDs for vector search without vector stores, plus fast string similarity algorithms"

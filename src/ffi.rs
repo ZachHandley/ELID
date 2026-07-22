@@ -279,7 +279,7 @@ pub extern "C" fn elid_version() -> *const c_char {
     // cbindgen's syn 1.x can't parse c"" literals, so use allow here
     #[allow(clippy::manual_c_str_literals)]
     {
-        "0.0.0-dev\0".as_ptr() as *const c_char
+        "\0".as_ptr() as *const c_char
     }
 }
 
